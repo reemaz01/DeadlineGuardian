@@ -262,12 +262,25 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
       if (!res.ok) {
         let errData;
         try {
-          errData = await res.json();
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            errData = await res.json();
+          }
         } catch (_) {}
         throw new Error(errData?.error || `Server responded with status ${res.status}`);
       }
 
-      const planData = await res.json();
+      let planData;
+      try {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          planData = await res.json();
+        } else {
+          throw new Error("Response was not in JSON format.");
+        }
+      } catch (e: any) {
+        throw new Error(e.message || "Failed to parse AI response.");
+      }
       if (!planData || Object.keys(planData).length === 0) {
         throw new Error("Empty plan data received from AI.");
       }
@@ -327,6 +340,7 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
     }
 
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/rescue-mode", {
         method: "POST",
@@ -339,16 +353,37 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
         }),
       });
 
-      if (!res.ok) throw new Error("Rescue failed");
-      const rescueData = await res.json();
+      if (!res.ok) {
+        let errData;
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            errData = await res.json();
+          }
+        } catch (_) {}
+        throw new Error(errData?.error || `Rescue plan failed (Status ${res.status}).`);
+      }
+
+      let rescueData;
+      try {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          rescueData = await res.json();
+        } else {
+          throw new Error("Response was not in JSON format.");
+        }
+      } catch (e: any) {
+        throw new Error(e.message || "Failed to parse rescue response.");
+      }
 
       onUpdateTask({
         ...task,
         rescuePlan: rescueData,
       });
       setActiveTab("rescue");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || "Something went wrong during rescue plan generation.");
     } finally {
       setIsLoading(false);
     }
@@ -380,9 +415,27 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
       });
 
       if (!res.ok) {
-        throw new Error("Unable to analyze procrastination patterns. Please try again.");
+        let errData;
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            errData = await res.json();
+          }
+        } catch (_) {}
+        throw new Error(errData?.error || "Unable to analyze procrastination patterns. Please try again.");
       }
-      const procData = await res.json();
+
+      let procData;
+      try {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          procData = await res.json();
+        } else {
+          throw new Error("Response was not in JSON format.");
+        }
+      } catch (e: any) {
+        throw new Error(e.message || "Failed to parse procrastination report.");
+      }
 
       onUpdateTask({
         ...task,
