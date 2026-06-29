@@ -64,6 +64,10 @@ export interface Task {
   procrastinationScore: number;
   procrastinationWarning: string;
   procrastinationQuickAction: string;
+  procrastinationRiskLevel?: string;
+  procrastinationAnalysis?: string;
+  procrastinationReason?: string;
+  procrastinationMotivationTip?: string;
 
   // AI-generated results
   aiPlan: AIPlan | null;

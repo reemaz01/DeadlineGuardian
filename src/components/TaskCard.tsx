@@ -356,17 +356,16 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
 
   // 3. Fetch Procrastination report
   const handleCheckProcrastination = async () => {
+    if (isLoading) return;
+
     if (activeTab === "procrastination") {
       setActiveTab("none");
       return;
     }
 
-    if (task.procrastinationScore > 0) {
-      setActiveTab("procrastination");
-      return;
-    }
-
+    setActiveTab("procrastination");
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/check-procrastination", {
         method: "POST",
@@ -376,21 +375,29 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
           creationDate: task.creationDate,
           deadline: task.deadline,
           progress: task.progress,
+          currentTime: new Date().toISOString()
         }),
       });
 
-      if (!res.ok) throw new Error("Procrastination analysis failed");
+      if (!res.ok) {
+        throw new Error("Unable to analyze procrastination patterns. Please try again.");
+      }
       const procData = await res.json();
 
       onUpdateTask({
         ...task,
         procrastinationScore: procData.procrastination_score,
-        procrastinationWarning: procData.warning_message,
-        procrastinationQuickAction: procData.quick_action,
+        procrastinationWarning: procData.analysis || procData.warning_message || "",
+        procrastinationQuickAction: procData.quick_action || "",
+        procrastinationRiskLevel: procData.risk_level || "Medium",
+        procrastinationAnalysis: procData.analysis || procData.warning_message || "",
+        procrastinationReason: procData.reason || "Task delay factors",
+        procrastinationMotivationTip: procData.motivation_tip || "Stay focused!",
+        lastUpdated: new Date().toISOString()
       });
-      setActiveTab("procrastination");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || "Something went wrong during analysis.");
     } finally {
       setIsLoading(false);
     }
@@ -755,23 +762,115 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
         </div>
       )}
 
-      {!isLoading && activeTab === "procrastination" && task.procrastinationScore > 0 && (
-        <div className="mt-4 p-4 rounded-2xl bg-amber-400/5 border border-amber-400/10 space-y-3 animate-in fade-in slide-in-from-top-3 text-white">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase text-amber-400 tracking-wider font-bold">Procrastination Alert</span>
-            <span className="text-sm font-mono font-black text-amber-400">{task.procrastinationScore}% Score</span>
-          </div>
+      {activeTab === "procrastination" && (
+        <div className="mt-4 border-t border-white/10 pt-4 space-y-4 animate-in fade-in slide-in-from-top-3">
+          {isLoading ? (
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4 animate-pulse">
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  <span className="text-xs font-bold text-white/70 uppercase tracking-widest font-sans">Shield Diagnostics Active...</span>
+                </div>
+                <div className="h-4 w-12 bg-white/10 rounded-lg" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 w-3/4 bg-white/10 rounded" />
+                <div className="h-3 w-5/6 bg-white/10 rounded" />
+                <div className="h-3 w-1/2 bg-white/10 rounded" />
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl border border-white/5 h-16 flex items-center justify-center">
+                <span className="text-[10px] text-white/40 font-mono">Evaluating temporal inertia & progress ratios...</span>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex flex-col gap-2">
+              <p className="font-sans font-bold">⚠️ Diagnostic Failure</p>
+              <p className="font-sans text-white/70">{error}</p>
+              <button
+                onClick={handleCheckProcrastination}
+                className="mt-1 self-start px-3 py-1 bg-red-500/20 hover:bg-red-500/35 border border-red-500/30 text-white rounded-lg transition-all text-[10px] uppercase font-bold"
+              >
+                Retry Analysis
+              </button>
+            </div>
+          ) : task.procrastinationScore > 0 ? (
+            <div className="p-5 rounded-2xl bg-neutral-950/40 border border-amber-400/20 space-y-4 text-white shadow-xl">
+              {/* Risk Banner */}
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <Zap className={`w-4 h-4 ${
+                    task.procrastinationRiskLevel === "Critical" ? "text-red-500 animate-pulse" :
+                    task.procrastinationRiskLevel === "High" ? "text-orange-500" :
+                    task.procrastinationRiskLevel === "Medium" ? "text-amber-400" : "text-[#34D399]"
+                  }`} />
+                  <span className="text-xs font-bold uppercase tracking-widest text-white/80">Procrastination Shield Audit</span>
+                </div>
+                
+                {/* Score badge */}
+                <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-full border border-white/10 font-mono text-xs">
+                  <span className="text-white/40">Score:</span>
+                  <span className={`font-black ${
+                    task.procrastinationScore >= 80 ? "text-red-500" :
+                    task.procrastinationScore >= 50 ? "text-amber-400" : "text-[#34D399]"
+                  }`}>{task.procrastinationScore}%</span>
+                </div>
+              </div>
 
-          <p className="font-sans text-xs text-white/80 leading-normal">
-            {task.procrastinationWarning}
-          </p>
+              {/* Risk & Reason summary */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
+                  task.procrastinationRiskLevel === "Critical" ? "bg-red-500/15 border border-red-500/30 text-red-400" :
+                  task.procrastinationRiskLevel === "High" ? "bg-orange-500/15 border border-orange-500/30 text-orange-400" :
+                  task.procrastinationRiskLevel === "Medium" ? "bg-amber-400/15 border border-amber-400/30 text-amber-300" :
+                  "bg-emerald-500/15 border border-emerald-500/30 text-[#34D399]"
+                }`}>
+                  🚨 Risk: {task.procrastinationRiskLevel || "Low"}
+                </span>
 
-          <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-            <span className="block text-[9px] uppercase font-mono text-white/40">5-Minute Micro-Action Starter</span>
-            <p className="font-sans text-xs text-[#34D399] font-bold mt-1 leading-relaxed">
-              {task.procrastinationQuickAction}
-            </p>
-          </div>
+                {task.procrastinationReason && (
+                  <span className="text-[10px] font-sans text-white/50 border border-white/10 px-2 py-0.5 rounded bg-white/5">
+                    ⚠ Reason: {task.procrastinationReason}
+                  </span>
+                )}
+              </div>
+
+              {/* AI Analysis Narrative */}
+              <div className="space-y-1.5">
+                <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">📝 AI Analysis</span>
+                <p className="font-sans text-xs text-white/85 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
+                  {task.procrastinationAnalysis || task.procrastinationWarning}
+                </p>
+              </div>
+
+              {/* Recommended Next Action */}
+              <div className="space-y-1.5">
+                <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">✅ Recommended Next Action</span>
+                <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex items-start gap-2.5">
+                  <span className="text-base select-none mt-0.5">⚡</span>
+                  <p className="font-sans text-xs text-[#34D399] font-bold leading-relaxed">
+                    {task.procrastinationQuickAction}
+                  </p>
+                </div>
+              </div>
+
+              {/* Motivation Tip */}
+              {task.procrastinationMotivationTip && (
+                <div className="space-y-1.5">
+                  <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">💡 Motivation Spark</span>
+                  <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-xl flex items-start gap-2.5">
+                    <span className="text-base select-none mt-0.5">✨</span>
+                    <p className="font-sans text-xs text-blue-300 italic leading-relaxed">
+                      {task.procrastinationMotivationTip}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-xs text-white/40">No analysis available. Click "Procrastination Check" below to initiate diagnostic scanning.</p>
+            </div>
+          )}
         </div>
       )}
     </div>

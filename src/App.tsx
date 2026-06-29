@@ -18,6 +18,7 @@ import {
   Clock,
   Sun,
   Moon,
+  LogOut,
 } from "lucide-react";
 import { Task, TaskCategory } from "./types";
 import TaskCard from "./components/TaskCard";
@@ -30,8 +31,206 @@ import VoiceAssistant from "./components/VoiceAssistant";
 import ChatBot from "./components/ChatBot";
 import HabitTracker from "./components/HabitTracker";
 import PlannerPanel from "./components/PlannerPanel";
+import AuthPage from "./components/AuthPage";
+
+function getDemoTasks(): Task[] {
+  return [
+    {
+      id: "demo-task-1",
+      title: "Physics Lab Simulation Report",
+      deadline: new Date(Date.now() + 1.5 * 60 * 60 * 1000).toISOString(), // 1.5 hours remaining
+      category: "Assignment",
+      progress: 25,
+      creationDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      lastUpdated: new Date().toISOString(),
+      completed: false,
+      riskScore: 90,
+      status: "HIGH RISK",
+      reason: "Less than 2 hours left before deadline locks. Emergency rescue is advised.",
+      suggestedAction: "Run AI Rescue Mode to structure micro-steps immediately.",
+      procrastinationScore: 82,
+      procrastinationWarning: "You added this assignment 3 days ago but have only reached 25% progress.",
+      procrastinationQuickAction: "Open your formula sheet and structure the first paragraph now.",
+      procrastinationRiskLevel: "High",
+      procrastinationAnalysis: "You have repeatedly delayed starting the narrative simulation blocks because of self-perceived complexity of calculations.",
+      procrastinationReason: "Calculation anxiety & narrative block",
+      procrastinationMotivationTip: "Make a draft of the intro paragraph. Zero calculations needed. Just open the Doc and write 3 lines.",
+      aiPlan: null,
+      rescuePlan: null,
+    },
+    {
+      id: "demo-task-2",
+      title: "Pitch Deck Review & Sync with Google Mentors",
+      deadline: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(), // ~25 hours remaining
+      category: "Meeting",
+      progress: 50,
+      creationDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      lastUpdated: new Date().toISOString(),
+      completed: false,
+      riskScore: 45,
+      status: "ON TRACK",
+      reason: "Sufficient buffers remain. Keep steady momentum.",
+      suggestedAction: "Draft outline points before entering the sync.",
+      procrastinationScore: 20,
+      procrastinationWarning: "No immediate procrastination risk flagged.",
+      procrastinationQuickAction: "List 3 core questions you want to ask your mentor.",
+      procrastinationRiskLevel: "Low",
+      procrastinationAnalysis: "Excellent progress speed. Small delays occurred on slide deck layout options but resolved quickly.",
+      procrastinationReason: "Perfect pacing",
+      procrastinationMotivationTip: "Mentors love concise pitch structures. Focus on clean metrics!",
+      aiPlan: {
+        estimated_completion_time: "2.5 hours",
+        priority: "High",
+        urgency_score: 55,
+        recommended_start_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        micro_steps: [
+          { step: "Refine slide 3-5 with latest product growth analytics", duration: "30 mins" },
+          { step: "Review speaker notes for SaaS pricing slide", duration: "20 mins" },
+          { step: "Draft questions about Google Cloud credit eligibility", duration: "15 mins" },
+          { step: "Do a practice run-through of the 5-minute presentation", duration: "45 mins" }
+        ],
+        summary: "A focused review of slides and Q&A preparation to ensure maximum impact in the Google Mentor Sync session.",
+        motivation_tip: "Focus on presenting quantitative proof of user retention.",
+      },
+      completedMicroSteps: { 0: true, 1: true, 2: false, 3: false },
+      rescuePlan: null,
+    },
+    {
+      id: "demo-task-3",
+      title: "SaaS Database Invoicing & AWS Bill Sync",
+      deadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // Completed
+      category: "Bill",
+      progress: 100,
+      creationDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      lastUpdated: new Date().toISOString(),
+      completed: true,
+      completedAt: new Date(Date.now() - 2.5 * 24 * 60 * 60 * 1000).toISOString(),
+      riskScore: 0,
+      status: "ON TRACK",
+      reason: "Task completed securely.",
+      suggestedAction: "None. Rest up!",
+      procrastinationScore: 0,
+      procrastinationWarning: "None. Rest up!",
+      procrastinationQuickAction: "None",
+      aiPlan: null,
+      rescuePlan: null,
+    },
+    {
+      id: "demo-task-4",
+      title: "Compiler Construction Final Exam Prep",
+      deadline: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(), // 12 hours remaining
+      category: "Assignment",
+      progress: 0,
+      creationDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      lastUpdated: new Date().toISOString(),
+      completed: false,
+      riskScore: 95,
+      status: "HIGH RISK",
+      reason: "Exam is tomorrow morning and progress is absolute zero.",
+      suggestedAction: "Initiate emergency rescue schedule immediately.",
+      procrastinationScore: 98,
+      procrastinationWarning: "Critical procrastination threat! Zero progress after 10 days of holding the task.",
+      procrastinationQuickAction: "Read the AST construction summary slides first.",
+      procrastinationRiskLevel: "Critical",
+      procrastinationAnalysis: "Fatal procrastination. You are experiencing severe overwhelm regarding LR(1) parsing tables, leading to active avoidance behavior.",
+      procrastinationReason: "Extreme complexity avoidance",
+      procrastinationMotivationTip: "LR(1) tables are just flowcharts. Sketch one parse state now to break the cycle.",
+      aiPlan: null,
+      rescuePlan: {
+        emergency_timeline: [
+          { time: "Hour 1 - 2", action: "Review shift-reduce parser concepts", priority: "Critical" },
+          { time: "Hour 2 - 3", action: "Practice LR parsing table walkthrough", priority: "High" },
+          { time: "Hour 3 - 4", action: "Solve past exam paper parse tree question", priority: "Critical" }
+        ],
+        exact_time_blocks: [
+          { block: "Block A", duration: "60 mins", task: "LALR vs LR parsing definitions" },
+          { block: "Block B", duration: "60 mins", task: "AST representation diagrams" }
+        ],
+        what_to_skip: ["Skipping grammar ambiguity proofs (rarely tested)", "Skipping multi-pass optimization algorithms"],
+        minimum_viable_submission: "Master basic grammar shift-reduce conflicts for 70% baseline score.",
+        survival_tips: ["Drink water", "No phone distractions", "Focus exclusively on parser state diagrams"]
+      }
+    }
+  ];
+}
+
+function getDefaultTasks(): Task[] {
+  return [
+    {
+      id: "task-1",
+      title: "Physics Lab Simulation Report Submission",
+      deadline: new Date(Date.now() + 1.5 * 60 * 60 * 1000).toISOString(), // 1.5 hours remaining
+      category: "Assignment",
+      progress: 25,
+      creationDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      lastUpdated: new Date().toISOString(),
+      completed: false,
+      riskScore: 90,
+      status: "HIGH RISK",
+      reason: "Less than 2 hours left before deadline locks. Emergency rescue is advised.",
+      suggestedAction: "Run AI Rescue Mode to structure micro-steps immediately.",
+      procrastinationScore: 82,
+      procrastinationWarning: "You added this assignment 3 days ago but have only reached 25% progress.",
+      procrastinationQuickAction: "Open your formula sheet and structure the first paragraph now.",
+      procrastinationRiskLevel: "High",
+      procrastinationAnalysis: "You have repeatedly delayed starting the narrative simulation blocks because of self-perceived complexity of calculations.",
+      procrastinationReason: "Calculation anxiety & narrative block",
+      procrastinationMotivationTip: "Make a draft of the intro paragraph. Zero calculations needed.",
+      aiPlan: null,
+      rescuePlan: null,
+    },
+    {
+      id: "task-2",
+      title: "Pitch Deck Review & Sync with Google Mentors",
+      deadline: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(), // ~25 hours remaining
+      category: "Meeting",
+      progress: 50,
+      creationDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      lastUpdated: new Date().toISOString(),
+      completed: false,
+      riskScore: 45,
+      status: "ON TRACK",
+      reason: "Sufficient buffers remain. Keep steady momentum.",
+      suggestedAction: "Draft outline points before entering the sync.",
+      procrastinationScore: 20,
+      procrastinationWarning: "No immediate procrastination risk flagged.",
+      procrastinationQuickAction: "List 3 core questions you want to ask your mentor.",
+      procrastinationRiskLevel: "Low",
+      procrastinationAnalysis: "Excellent progress speed.",
+      procrastinationReason: "Perfect pacing",
+      procrastinationMotivationTip: "Mentors love concise pitch structures.",
+      aiPlan: null,
+      rescuePlan: null,
+    },
+    {
+      id: "task-3",
+      title: "SaaS Database Invoicing & AWS Bill Sync",
+      deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days remaining
+      category: "Bill",
+      progress: 100,
+      creationDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      lastUpdated: new Date().toISOString(),
+      completed: true,
+      riskScore: 0,
+      status: "ON TRACK",
+      reason: "Task completed securely.",
+      suggestedAction: "None. Rest up!",
+      procrastinationScore: 0,
+      procrastinationWarning: "",
+      procrastinationQuickAction: "",
+      aiPlan: null,
+      rescuePlan: null,
+    },
+  ];
+}
 
 export default function App() {
+  // Authentication & Session
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string; isDemo?: boolean } | null>(() => {
+    const savedUser = localStorage.getItem("deadline_guardian_user");
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [streak, setStreak] = useState(3); // Prepopulate default streak for motivation
   
@@ -66,78 +265,9 @@ export default function App() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifiedThresholds, setNotifiedThresholds] = useState<Record<string, string[]>>({});
 
-  // 1. Initial hydration & prepopulation
+  // 1. Initial hydration & prepopulation per user
   useEffect(() => {
-    const savedTasks = localStorage.getItem("deadline_guardian_tasks");
     const savedStreak = localStorage.getItem("deadline_guardian_streak");
-    
-    if (savedTasks) {
-      setTasks(JSON.parse(savedTasks));
-    } else {
-      // Prepopulate default tasks for excellent initial experience
-      const defaultTasks: Task[] = [
-        {
-          id: "task-1",
-          title: "Physics Lab Simulation Report Submission",
-          deadline: new Date(Date.now() + 1.5 * 60 * 60 * 1000).toISOString(), // 1.5 hours remaining
-          category: "Assignment",
-          progress: 25,
-          creationDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          lastUpdated: new Date().toISOString(),
-          completed: false,
-          riskScore: 90,
-          status: "HIGH RISK",
-          reason: "Less than 2 hours left before deadline locks. Emergency rescue is advised.",
-          suggestedAction: "Run AI Rescue Mode to structure micro-steps immediately.",
-          procrastinationScore: 82,
-          procrastinationWarning: "You added this assignment 3 days ago but have only reached 25% progress.",
-          procrastinationQuickAction: "Open your formula sheet and structure the first paragraph now.",
-          aiPlan: null,
-          rescuePlan: null,
-        },
-        {
-          id: "task-2",
-          title: "Pitch Deck Review & Sync with Google Mentors",
-          deadline: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(), // ~25 hours remaining
-          category: "Meeting",
-          progress: 50,
-          creationDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          lastUpdated: new Date().toISOString(),
-          completed: false,
-          riskScore: 45,
-          status: "ON TRACK",
-          reason: "Sufficient buffers remain. Keep steady momentum.",
-          suggestedAction: "Draft outline points before entering the sync.",
-          procrastinationScore: 20,
-          procrastinationWarning: "No immediate procrastination risk flagged.",
-          procrastinationQuickAction: "List 3 core questions you want to ask your mentor.",
-          aiPlan: null,
-          rescuePlan: null,
-        },
-        {
-          id: "task-3",
-          title: "SaaS Database Invoicing & AWS Bill Sync",
-          deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days remaining
-          category: "Bill",
-          progress: 100,
-          creationDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          lastUpdated: new Date().toISOString(),
-          completed: true,
-          riskScore: 0,
-          status: "ON TRACK",
-          reason: "Task completed securely.",
-          suggestedAction: "None. Rest up!",
-          procrastinationScore: 0,
-          procrastinationWarning: "",
-          procrastinationQuickAction: "",
-          aiPlan: null,
-          rescuePlan: null,
-        },
-      ];
-      setTasks(defaultTasks);
-      localStorage.setItem("deadline_guardian_tasks", JSON.stringify(defaultTasks));
-    }
-
     if (savedStreak) {
       setStreak(parseInt(savedStreak, 10));
     }
@@ -148,15 +278,54 @@ export default function App() {
     }
   }, []);
 
+  // Sync tasks dynamically based on logged-in user to guarantee session-isolation and Demo Mode contents
+  useEffect(() => {
+    if (!currentUser) {
+      setTasks([]);
+      return;
+    }
+
+    const userKey = `deadline_guardian_tasks_${currentUser.email}`;
+    const savedTasks = localStorage.getItem(userKey);
+    
+    if (savedTasks) {
+      setTasks(JSON.parse(savedTasks));
+    } else {
+      if (currentUser.isDemo) {
+        const demoTasks = getDemoTasks();
+        setTasks(demoTasks);
+        localStorage.setItem(userKey, JSON.stringify(demoTasks));
+      } else {
+        const defaultTasks = getDefaultTasks();
+        setTasks(defaultTasks);
+        localStorage.setItem(userKey, JSON.stringify(defaultTasks));
+      }
+    }
+  }, [currentUser]);
+
   // Sync to local storage
   const saveTasksToStore = (newTasks: Task[]) => {
     setTasks(newTasks);
-    localStorage.setItem("deadline_guardian_tasks", JSON.stringify(newTasks));
+    if (currentUser) {
+      localStorage.setItem(`deadline_guardian_tasks_${currentUser.email}`, JSON.stringify(newTasks));
+    } else {
+      localStorage.setItem("deadline_guardian_tasks", JSON.stringify(newTasks));
+    }
   };
 
   const saveStreakToStore = (newStreak: number) => {
     setStreak(newStreak);
     localStorage.setItem("deadline_guardian_streak", String(newStreak));
+  };
+
+  const handleLogin = (user: { email: string; name: string; isDemo?: boolean }) => {
+    setCurrentUser(user);
+    localStorage.setItem("deadline_guardian_user", JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem("deadline_guardian_user");
   };
 
   // 2. Request Notifications Permission
@@ -340,6 +509,10 @@ export default function App() {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
+  if (!currentUser) {
+    return <AuthPage onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#0F1115] text-white selection:bg-[#5B8CFF] selection:text-black font-sans relative pb-16 antialiased">
       {/* Decorative gradient overlay */}
@@ -364,6 +537,14 @@ export default function App() {
 
           {/* Quick Stats overview */}
           <div className="flex items-center gap-4 flex-wrap">
+            {/* Demo Badge */}
+            {currentUser.isDemo && (
+              <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-3.5 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-[10px] font-mono font-black text-amber-300 uppercase tracking-wider">Demo Mode</span>
+              </div>
+            )}
+
             {/* Streak counter */}
             <div className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full px-3.5 py-1">
               <Flame className="w-4 h-4 text-orange-400 animate-pulse" />
@@ -404,6 +585,16 @@ export default function App() {
             >
               <Plus className="w-4 h-4" />
               <span>Add Task</span>
+            </button>
+
+            {/* Logout button */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-red-500/20 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all text-xs font-sans font-semibold active:scale-95"
+              title="Logout current session"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
             </button>
           </div>
         </div>

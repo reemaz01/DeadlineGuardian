@@ -338,18 +338,60 @@ Provide the optimized schedule back in JSON format. Rank them by urgency, alloca
 
 // 4. POST /api/check-procrastination
 app.post("/api/check-procrastination", async (req, res) => {
-  const { title, creationDate, deadline, progress } = req.body;
+  const { title, creationDate, deadline, progress, currentTime } = req.body;
   const ai = getAIClient();
 
-  if (!ai) {
-    const daysElapsed = Math.max(1, Math.floor((Date.now() - new Date(creationDate).getTime()) / (1000 * 60 * 60 * 24)));
-    const mockScore = Math.min(100, Math.max(10, Math.floor((daysElapsed * 20) * (1 - (progress || 0) / 100))));
+  const now = currentTime ? new Date(currentTime) : new Date();
+  const dl = new Date(deadline);
+
+  // If the deadline has already passed, automatically return missed deadline info
+  if (now.getTime() > dl.getTime()) {
     return res.json({
-      procrastination_score: mockScore,
-      warning_message: mockScore > 60
-        ? `Warning: This task has been in your register for ${daysElapsed} days with progress stuck at ${progress}%.`
-        : "You are making steady progress! Keep it rolling.",
-      quick_action: "Set a 5-minute timer and just open the core resources/documents right now."
+      procrastination_score: 100,
+      risk_level: "Critical",
+      analysis: "This task has exceeded its scheduled deadline. It is currently in 'MISSED DEADLINE' status. Immediate action is required to resolve or reschedule.",
+      reason: "Missed Deadline",
+      quick_action: "Contact your instructor, client, or team immediately to request an extension, or archive the task.",
+      motivation_tip: "Don't let one missed deadline discourage you. Reset, replan, and tackle the next task on your list!"
+    });
+  }
+
+  if (!ai) {
+    const daysElapsed = Math.max(1, Math.floor((now.getTime() - new Date(creationDate).getTime()) / (1000 * 60 * 60 * 24)));
+    const score = Math.min(100, Math.max(10, Math.floor((daysElapsed * 20) * (1 - (progress || 0) / 100))));
+    let risk_level = "Low";
+    let analysis = "You are making steady progress! Keep it rolling.";
+    let reason = "Steady paced workflow.";
+    let quick_action = "Set a 5-minute timer and just open the core resources/documents right now.";
+    let motivation_tip = "The best way to get something done is to begin. Five minutes is all it takes.";
+
+    if (score >= 85) {
+      risk_level = "Critical";
+      analysis = "Extreme procrastination danger! The deadline is dangerously close, and progress is still minimal.";
+      reason = "Severe task paralysis despite proximity to deadline.";
+      quick_action = "Open your files and spend exactly 2 minutes outlining just one item.";
+      motivation_tip = "Action precedes motivation. Start with 120 seconds of effort.";
+    } else if (score >= 60) {
+      risk_level = "High";
+      analysis = "High procrastination detected! Time is running out fast.";
+      reason = "Task added several days ago with minimal progress.";
+      quick_action = "Set a 5-minute Pomodoro timer and start drafting.";
+      motivation_tip = "A 5-minute draft is infinitely better than a perfect blank page.";
+    } else if (score >= 30) {
+      risk_level = "Medium";
+      analysis = "You've let some days slip without progress. Let's regain the focus.";
+      reason = "Minor inertia starting the next phase.";
+      quick_action = "List 3 quick questions you can answer about this task.";
+      motivation_tip = "Progress isn't all or nothing. Small steps compound.";
+    }
+
+    return res.json({
+      procrastination_score: score,
+      risk_level,
+      analysis,
+      reason,
+      quick_action,
+      motivation_tip
     });
   }
 
@@ -359,8 +401,9 @@ Task Title: "${title}"
 Created On: "${creationDate}"
 Deadline: "${deadline}"
 Current Progress: ${progress}%
+Current Reference Time: "${now.toISOString()}"
 
-Calculate procrastination score (0-100), write a witty Gen-Z warning message, and suggest a 5-minute quick start micro-action. Return in JSON format.`;
+Calculate procrastination score (0-100), risk_level ("Low", "Medium", "High", or "Critical"), write an insightful, witty, and helpful analysis, identify the main reason of procrastination for this specific task, suggest a 5-minute quick start recommended next action, and write a motivational tip to overcome procrastination. Return in JSON format matching the schema.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -371,10 +414,13 @@ Calculate procrastination score (0-100), write a witty Gen-Z warning message, an
           type: Type.OBJECT,
           properties: {
             procrastination_score: { type: Type.INTEGER, description: "0 to 100" },
-            warning_message: { type: Type.STRING },
-            quick_action: { type: Type.STRING }
+            risk_level: { type: Type.STRING, description: "Low, Medium, High, or Critical" },
+            analysis: { type: Type.STRING },
+            reason: { type: Type.STRING, description: "The main reason for procrastination" },
+            quick_action: { type: Type.STRING, description: "5-minute recommended next action" },
+            motivation_tip: { type: Type.STRING }
           },
-          required: ["procrastination_score", "warning_message", "quick_action"]
+          required: ["procrastination_score", "risk_level", "analysis", "reason", "quick_action", "motivation_tip"]
         }
       }
     });
