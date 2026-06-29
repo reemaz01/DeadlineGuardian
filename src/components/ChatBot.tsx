@@ -26,8 +26,12 @@ export default function ChatBot({ tasks }: ChatBotProps) {
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const chatCacheRef = useRef<Record<string, string>>({});
+  const lastSendTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -37,34 +41,116 @@ export default function ChatBot({ tasks }: ChatBotProps) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
+    const query = inputValue.trim();
+    if (!query || isLoading) return;
+
+    // Debounce: prevent duplicate clicks under 1 second
+    const nowTimestamp = Date.now();
+    if (nowTimestamp - lastSendTimeRef.current < 1000) {
+      return;
+    }
+    lastSendTimeRef.current = nowTimestamp;
 
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: "user",
-      text: inputValue.trim(),
+      text: query,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInputValue("");
     setIsLoading(true);
+    setRetryMessage(null);
+
+    // 1. Check cache first (normalized key to handle whitespace/case differences)
+    const cacheKey = query.toLowerCase().trim();
+    if (chatCacheRef.current[cacheKey]) {
+      const cachedResponse = chatCacheRef.current[cacheKey];
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: "ai",
+        text: cachedResponse,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setTimeout(() => {
+        setMessages((prev) => [...prev, aiMsg]);
+        setIsLoading(false);
+      }, 300);
+      return;
+    }
+
+    // 2. Cancel duplicate/pending active request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Helper for fetch with single retry on 503
+    const fetchWithBackoff = async (
+      url: string,
+      options: RequestInit,
+      retriesLeft = 1,
+      delayMs = 2000
+    ): Promise<Response> => {
+      try {
+        const response = await fetch(url, options);
+        if (response.status === 503 && retriesLeft > 0) {
+          console.warn(`Chatbot 503 received. Retrying in ${delayMs}ms... (${retriesLeft} left)`);
+          setRetryMessage(`Retrying...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return fetchWithBackoff(url, options, retriesLeft - 1, delayMs * 2);
+        }
+        return response;
+      } catch (fetchErr: any) {
+        if (fetchErr.name === "AbortError") {
+          throw fetchErr;
+        }
+        if (retriesLeft > 0) {
+          console.warn(`Chatbot connection error. Retrying in ${delayMs}ms... (${retriesLeft} left)`);
+          setRetryMessage(`Retrying...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return fetchWithBackoff(url, options, retriesLeft - 1, delayMs * 2);
+        }
+        throw fetchErr;
+      }
+    };
 
     try {
-      const response = await fetch("/api/chatbot", {
+      // Send the current message along with all previous messages in the conversation for complete context.
+      const conversationHistory = [...messages, userMsg].map((m) => ({
+        sender: m.sender,
+        text: m.text,
+      }));
+
+      const response = await fetchWithBackoff("/api/chatbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           message: userMsg.text,
+          history: conversationHistory,
           tasks: tasks,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Chatbot API response failed");
+        let errData;
+        try {
+          errData = await response.json();
+        } catch (_) {}
+        throw new Error(errData?.error || `Server error (Status: ${response.status})`);
       }
 
       const data = await response.json();
+      if (!data || !data.response) {
+        throw new Error("Received an empty response from the server.");
+      }
+
+      // Cache successful response
+      chatCacheRef.current[cacheKey] = data.response;
+
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: "ai",
@@ -73,17 +159,27 @@ export default function ChatBot({ tasks }: ChatBotProps) {
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        console.log("ChatBot request aborted.");
+        return;
+      }
+      console.error("ChatBot Error:", err);
+      
+      const errorText = "⚠️ Guardian AI is currently experiencing high demand. Please try again in a few moments.";
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: "ai",
-        text: "My neural wires got crossed for a sec. Make sure your local server is humming, or just ask me again in a moment!",
+        text: errorText,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
-      setIsLoading(false);
+      if (abortControllerRef.current === controller) {
+        setIsLoading(false);
+        setRetryMessage(null);
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -145,14 +241,14 @@ export default function ChatBot({ tasks }: ChatBotProps) {
               </div>
             ))}
             {isLoading && (
-              <div className="flex flex-col items-start max-w-[85%] mr-auto">
+              <div className="flex flex-col items-start max-w-[85%] mr-auto animate-pulse">
                 <div className="bg-white/5 border border-white/10 text-white/70 px-4 py-2.5 rounded-2xl rounded-bl-none text-xs font-sans flex items-center gap-2">
                   <div className="flex gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-bounce" />
                     <span className="w-1.5 h-1.5 rounded-full bg-[#5B8CFF] animate-bounce [animation-delay:0.2s]" />
                     <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-bounce [animation-delay:0.4s]" />
                   </div>
-                  <span>Thinking...</span>
+                  <span>{retryMessage || "Thinking..."}</span>
                 </div>
               </div>
             )}
@@ -165,12 +261,14 @@ export default function ChatBot({ tasks }: ChatBotProps) {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask Guardian anything..."
-              className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-xs font-sans text-white placeholder-white/40 focus:outline-none focus:border-[#5B8CFF] focus:ring-1 focus:ring-[#5B8CFF] transition-all"
+              disabled={isLoading}
+              placeholder={isLoading ? "Please wait..." : "Ask Guardian anything..."}
+              className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-xs font-sans text-white placeholder-white/40 focus:outline-none focus:border-[#5B8CFF] focus:ring-1 focus:ring-[#5B8CFF] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <button
               type="submit"
-              className="p-2.5 bg-[#5B8CFF] hover:bg-[#5B8CFF]/90 text-white rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95"
+              disabled={isLoading}
+              className="p-2.5 bg-[#5B8CFF] hover:bg-[#5B8CFF]/90 text-white rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
               <Send className="w-4 h-4" />
             </button>

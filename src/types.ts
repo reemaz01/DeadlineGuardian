@@ -51,6 +51,8 @@ export interface Task {
   creationDate: string; // ISO String
   lastUpdated: string; // ISO String
   completed: boolean;
+  completedAt?: string; // ISO String when completed
+  completedMicroSteps?: Record<number, boolean>; // Persistent record of completed micro-step indices
   
   // Risk Analysis fields
   riskScore: number; // 0 - 100

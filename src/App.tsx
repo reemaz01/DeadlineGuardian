@@ -16,6 +16,8 @@ import {
   Bell,
   HelpCircle,
   Clock,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Task, TaskCategory } from "./types";
 import TaskCard from "./components/TaskCard";
@@ -27,16 +29,32 @@ import FocusTimer from "./components/FocusTimer";
 import VoiceAssistant from "./components/VoiceAssistant";
 import ChatBot from "./components/ChatBot";
 import HabitTracker from "./components/HabitTracker";
+import PlannerPanel from "./components/PlannerPanel";
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [streak, setStreak] = useState(3); // Prepopulate default streak for motivation
   
   // Navigation & filters
-  const [currentSection, setCurrentSection] = useState<"tasks" | "scheduler" | "timeline" | "analytics" | "focus" | "habits">("tasks");
+  const [currentSection, setCurrentSection] = useState<"tasks" | "scheduler" | "timeline" | "analytics" | "focus" | "habits" | "plans">("tasks");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<TaskCategory | "All">("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Completed" | "High Risk" | "Overdue">("All");
+
+  // Appearance Theme state
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    return (localStorage.getItem("deadline_guardian_theme") as "dark" | "light") || "dark";
+  });
+
+  // Theme synchronization with DOM
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "light") {
+      root.classList.add("theme-light");
+    } else {
+      root.classList.remove("theme-light");
+    }
+  }, [theme]);
 
   // Manual Form Adder State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -365,6 +383,20 @@ export default function App() {
               <span>{notificationsEnabled ? "Notifiers Live" : "Enable Alerts"}</span>
             </button>
 
+            {/* Appearance Theme Toggle */}
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex items-center justify-center p-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-all active:scale-95"
+              title="Toggle Light/Dark Theme"
+              aria-label="Toggle Light/Dark Theme"
+            >
+              {theme === "dark" ? (
+                <Sun className="w-4 h-4 text-yellow-400 animate-spin-slow" />
+              ) : (
+                <Moon className="w-4 h-4 text-[#5B8CFF]" />
+              )}
+            </button>
+
             {/* Quick Add Form trigger */}
             <button
               onClick={() => setIsFormOpen(!isFormOpen)}
@@ -396,6 +428,23 @@ export default function App() {
               >
                 <Layers className="w-4 h-4" />
                 <span>Dashboard & Tasks</span>
+              </button>
+
+              <button
+                onClick={() => setCurrentSection("plans")}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-display font-black uppercase tracking-wider text-left transition-all ${
+                  currentSection === "plans"
+                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span>AI Roadmaps</span>
+                </div>
+                <span className="text-[10px] font-mono font-black bg-purple-500/25 px-2 py-0.5 rounded-full text-purple-300">
+                  {tasks.filter((t) => t.aiPlan).length}
+                </span>
               </button>
 
               <button
@@ -623,28 +672,74 @@ export default function App() {
               </div>
 
               {/* Grid Board of task cards */}
-              <div>
-                <h3 className="font-sans font-bold text-sm text-white/80 uppercase tracking-wider mb-4">Guarded Deadlines Ledger</h3>
-                
+              <div className="space-y-8">
                 {filteredTasksList.length === 0 ? (
-                  <div className="text-center py-16 border border-dashed border-white/10 rounded-3xl">
-                    <Layers className="w-12 h-12 text-white/10 mx-auto mb-3 animate-pulse" />
-                    <h4 className="font-sans font-bold text-sm text-white mb-1">No Guarded Tasks Found</h4>
-                    <p className="font-sans text-xs text-white/40 max-w-sm mx-auto">
-                      Adjust your filter inputs above, dictate a voice command, or add a task manually using the button in the header.
-                    </p>
+                  <div>
+                    <h3 className="font-sans font-bold text-sm text-white/80 uppercase tracking-wider mb-4">Guarded Deadlines Ledger</h3>
+                    <div className="text-center py-16 border border-dashed border-white/10 rounded-3xl">
+                      <Layers className="w-12 h-12 text-white/10 mx-auto mb-3 animate-pulse" />
+                      <h4 className="font-sans font-bold text-sm text-white mb-1">No Guarded Tasks Found</h4>
+                      <p className="font-sans text-xs text-white/40 max-w-sm mx-auto">
+                        Adjust your filter inputs above, dictate a voice command, or add a task manually using the button in the header.
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {filteredTasksList.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onUpdateTask={handleUpdateTask}
-                        onDeleteTask={handleDeleteTask}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    {(() => {
+                      const activeTasks = statusFilter === "All" 
+                        ? filteredTasksList.filter((t) => !t.completed)
+                        : statusFilter === "Completed" ? [] : filteredTasksList;
+
+                      const completedTasks = statusFilter === "All"
+                        ? filteredTasksList.filter((t) => t.completed)
+                        : statusFilter === "Completed" ? filteredTasksList : [];
+
+                      return (
+                        <>
+                          {/* Active Section */}
+                          {activeTasks.length > 0 && (
+                            <div>
+                              <h3 className="font-sans font-bold text-xs text-white/60 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-[#5B8CFF] animate-pulse" />
+                                <span>Active Guarded Deadlines ({activeTasks.length})</span>
+                              </h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {activeTasks.map((task) => (
+                                  <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    onUpdateTask={handleUpdateTask}
+                                    onDeleteTask={handleDeleteTask}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Completed Section */}
+                          {completedTasks.length > 0 && (
+                            <div className="pt-4 border-t border-white/5">
+                              <h3 className="font-sans font-bold text-xs text-[#34D399] uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-[#34D399]" />
+                                <span>Completed Tasks & History ({completedTasks.length})</span>
+                              </h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-85 hover:opacity-100 transition-opacity">
+                                {completedTasks.map((task) => (
+                                  <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    onUpdateTask={handleUpdateTask}
+                                    onDeleteTask={handleDeleteTask}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
                 )}
               </div>
             </div>
@@ -682,6 +777,66 @@ export default function App() {
           {currentSection === "habits" && (
             <div className="animate-in fade-in slide-in-from-bottom-2">
               <HabitTracker onStreakUpdate={saveStreakToStore} externalStreak={streak} />
+            </div>
+          )}
+
+          {/* SECTION 7: Centralized AI Roadmaps & Plans */}
+          {currentSection === "plans" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
+              <div className="p-6 rounded-[32px] border border-white/10 bg-white/5 shadow-xl">
+                <div className="flex items-center justify-between flex-wrap gap-4 mb-6 pb-4 border-b border-white/5">
+                  <div>
+                    <h3 className="font-sans font-black text-lg text-white uppercase flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-purple-400" />
+                      <span>Generated AI Roadmaps</span>
+                    </h3>
+                    <p className="text-xs text-white/40">Your central Command Deck workspace containing all custom-generated high-precision checklists.</p>
+                  </div>
+                  <span className="text-xs font-mono bg-purple-500/10 text-purple-400 px-3 py-1 rounded-full border border-purple-500/20 font-black uppercase">
+                    {tasks.filter((t) => t.aiPlan).length} Active Blueprints
+                  </span>
+                </div>
+
+                {tasks.filter((t) => t.aiPlan).length === 0 ? (
+                  <div className="text-center py-16 border border-dashed border-white/10 rounded-3xl">
+                    <Sparkles className="w-12 h-12 text-white/10 mx-auto mb-3 animate-pulse" />
+                    <h4 className="font-sans font-bold text-sm text-white mb-1">No AI Roadmaps Crafted Yet</h4>
+                    <p className="font-sans text-xs text-white/40 max-w-sm mx-auto mb-6">
+                      Go to the Dashboard, choose any target task, and click "Generate Plan" to build a customized, highly granular timeline.
+                    </p>
+                    <button
+                      onClick={() => setCurrentSection("tasks")}
+                      className="px-5 py-2 bg-[#5B8CFF] hover:bg-[#5B8CFF]/90 text-white rounded-xl text-xs font-sans font-bold transition-all active:scale-95 shadow-md shadow-[#5B8CFF]/20"
+                    >
+                      Go to Dashboard
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {tasks.filter((t) => t.aiPlan).map((task) => (
+                      <div key={task.id} className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-white/5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono bg-[#5B8CFF]/15 text-[#5B8CFF] border border-[#5B8CFF]/20 px-2 py-0.5 rounded-full font-bold uppercase">
+                              {task.category}
+                            </span>
+                            <span className="text-xs font-bold text-white">{task.title}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setCurrentSection("tasks");
+                            }}
+                            className="text-[10px] font-mono text-[#5B8CFF] hover:underline uppercase font-bold"
+                          >
+                            Manage on Taskboard &rarr;
+                          </button>
+                        </div>
+                        <PlannerPanel task={task} onUpdateTask={handleUpdateTask} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

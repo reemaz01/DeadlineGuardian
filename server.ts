@@ -31,49 +31,104 @@ function getAIClient(): GoogleGenAI | null {
 
 // Helper to sanitize JSON response string
 function extractJSON(text: string): any {
+  if (!text) {
+    throw new Error("Empty response received from AI");
+  }
+  const trimmed = text.trim();
+  // Check if it's wrapped in markdown code blocks
+  let cleaned = trimmed;
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
+  }
   try {
-    const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/, "").trim();
     return JSON.parse(cleaned);
-  } catch (err) {
-    console.error("Failed to parse AI response as JSON", text, err);
-    throw err;
+  } catch (err: any) {
+    console.error("Failed to parse AI response as JSON. Original text:", text, "Error:", err);
+    // Let's attempt to extract the first '{' and last '}' if there is junk text around it
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        const sliced = cleaned.slice(firstBrace, lastBrace + 1);
+        return JSON.parse(sliced);
+      } catch (innerErr) {
+        throw new Error(`Failed to parse response as JSON: ${err.message}`);
+      }
+    }
+    throw new Error(`Failed to parse response as JSON: ${err.message}`);
+  }
+}
+
+// Helper to call Gemini with retry and exponential backoff on 503 Service Unavailable / RESOURCE_EXHAUSTED
+async function callGeminiWithRetry(ai: any, args: any, retries = 3, delay = 2000): Promise<any> {
+  try {
+    const response = await ai.models.generateContent(args);
+    return response;
+  } catch (error: any) {
+    const errorStr = String(error?.message || error || "");
+    const is503 = error?.status === 503 || error?.statusCode === 503 || errorStr.includes("503") || errorStr.includes("UNAVAILABLE") || errorStr.includes("RESOURCE_EXHAUSTED") || errorStr.includes("busy");
+    if (is503 && retries > 0) {
+      console.warn(`Gemini API returned 503/UNAVAILABLE. Retrying in ${delay}ms... (${retries} retries left). Error: ${errorStr}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callGeminiWithRetry(ai, args, retries - 1, delay * 2);
+    }
+    throw error;
   }
 }
 
 // 1. POST /api/generate-plan
 app.post("/api/generate-plan", async (req, res) => {
-  const { title, category, deadline, currentTime } = req.body;
+  const { title, task, category, deadline, currentTime, granularity, focusInterval, workStyle } = req.body;
+  const taskTitle = title || task;
   const ai = getAIClient();
 
+  const configGranularity = granularity || "detailed";
+  const configFocusInterval = focusInterval || 25;
+  const configWorkStyle = workStyle || "bulletproof";
+
   if (!ai) {
-    // Fallback logic if API key is missing
-    const score = Math.floor(Math.random() * 40) + 40;
+    // Fallback logic if API key is missing (respects configuration to feel alive!)
+    const score = Math.floor(Math.random() * 30) + 45;
+    const recommendedDelayMin = 10;
+    
+    // Custom steps based on settings
+    let steps = [];
+    if (configGranularity === "detailed") {
+      steps = [
+        { step: `Prepare setup & gather required resources for ${category}`, duration: "15 mins" },
+        { step: `Draft core structure / initial design block`, duration: `${configFocusInterval} mins` },
+        { step: `First implementation phase focusing on primary objectives`, duration: `${configFocusInterval} mins` },
+        { step: `Refining and formatting draft details`, duration: "20 mins" },
+        { step: `Double check requirements list & fix minor errors`, duration: "15 mins" }
+      ];
+    } else {
+      steps = [
+        { step: `Core implementation & development of ${category} objectives`, duration: `${configFocusInterval * 2} mins` },
+        { step: `Comprehensive validation and final export`, duration: `${configFocusInterval} mins` }
+      ];
+    }
+
+    if (configWorkStyle === "speed") {
+      steps = steps.slice(0, 3); // speed mode is shorter
+    }
+
     return res.json({
-      estimated_completion_time: "3-4 hours",
-      priority: score > 70 ? "HIGH" : "MEDIUM",
+      estimated_completion_time: configWorkStyle === "speed" ? "1-2 hours" : "3-4 hours",
+      priority: score > 75 ? "HIGH" : "MEDIUM",
       urgency_score: score,
-      recommended_start_time: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-      micro_steps: [
-        { step: "Initial outline & planning", duration: "30 mins" },
-        { step: "Core implementation & setup", duration: "1.5 hours" },
-        { step: "Testing and refinements", duration: "1 hour" }
-      ],
-      summary: `Localized baseline roadmap generated for "${title}". Start early to keep risk minimal.`,
-      motivation_tip: "Focus on the first 5 minutes. Motivation follows action!"
+      recommended_start_time: new Date(Date.now() + recommendedDelayMin * 60 * 1000).toISOString(),
+      micro_steps: steps,
+      summary: `Precise local blueprint crafted for "${taskTitle}". Strategy optimized for ${configWorkStyle} style, structured in ${configFocusInterval}-minute deep focus blocks with ${configGranularity} step tracking.`,
+      motivation_tip: configWorkStyle === "speed" ? "Speed run active! Do not over-polish, get the MVP working first." : "Precision execution engaged. Trust the sequence and focus on one block at a time!"
     });
   }
 
   try {
-    const prompt = `You are an elite productivity planner called 'Deadline Guardian AI'.
-Analyze the following task:
-Title: "${title}"
-Category: "${category}"
-Deadline: "${deadline}"
-Current Time: "${currentTime}"
+    const prompt = `Generate a task plan in JSON format. Keep the summary and motivation_tip extremely short and under 150 words total.
+Task: "${taskTitle}" (Category: "${category}", Deadline: "${deadline}", Time: "${currentTime}").
+Options: Granularity: ${configGranularity}, Focus Interval: ${configFocusInterval}m, Style: ${configWorkStyle}.`;
 
-Generate a personalized execution plan in JSON format. Provide estimated time, priority level, urgency score (0-100), recommended start time, step-by-step breakdown (micro-steps with durations), a high-level summary, and a tailored motivating tip.`;
-
-    const response = await ai.models.generateContent({
+    const response = await callGeminiWithRetry(ai, {
       model: "gemini-3.5-flash",
       contents: prompt,
       config: {
@@ -107,7 +162,8 @@ Generate a personalized execution plan in JSON format. Provide estimated time, p
     res.json(extractJSON(response.text || "{}"));
   } catch (error: any) {
     console.error("Error in /api/generate-plan:", error);
-    res.status(500).json({ error: error.message });
+    // Return friendly error inside valid JSON with status 503 so frontend knows to retry or display busy message
+    res.status(503).json({ error: "AI is currently busy. Please try again in a few moments." });
   }
 });
 
@@ -398,7 +454,7 @@ Extract and format details into:
 
 // 6. POST /api/chatbot
 app.post("/api/chatbot", async (req, res) => {
-  const { message, tasks } = req.body;
+  const { message, history, tasks } = req.body;
   const ai = getAIClient();
 
   if (!ai) {
@@ -416,36 +472,46 @@ ${tasks && tasks.length > 0
   }
 
   try {
-    const prompt = `You are the ultimate Deadline Guardian AI chatbot assistant — an expert, witty, Gen-Z styled hyper-focused companion who helps professionals and students crush their goals. 
-You use light humor, gaming analogies, and high-energy encouragement.
+    const isComplex = message.length > 200 || 
+                      /\b(plan|schedule|optimize|algorithm|code|math|science|complex|detailed|generate|create)\b/i.test(message);
+    const modelToUse = isComplex ? "gemini-3.5-flash" : "gemini-3.1-flash-lite";
 
-Current local time is: "${new Date().toISOString()}"
+    const needsHistory = /\b(that|it|previous|before|last|explain|why|elaborate|again|tell me more|what about|how so|yes|no)\b/i.test(message);
+    const simplifiedHistory = (needsHistory && history && history.length > 0)
+      ? history.slice(-2).map((msg: any) => `${msg.sender === "user" ? "User" : "Guardian"}: ${msg.text}`).join("\n")
+      : "";
 
-Current tasks in the user's ledger:
-${JSON.stringify(tasks, null, 2)}
+    let tasksContext = "";
+    if (tasks && tasks.length > 0 && /\b(task|list|todo|job|deadline|schedule|done|progress|work)\b/i.test(message)) {
+      tasksContext = "Active tasks:\n" + tasks.map((t: any) => `- ${t.title} (${t.category}, ${t.status || "PENDING"})`).slice(0, 5).join("\n");
+    }
 
-User's query/message: "${message}"
+    const systemInstruction = `You are "Deadline Guardian AI", a concise productivity assistant.
+CRITICAL RULES:
+1. Limit responses strictly to 50-80 words. Be direct, crisp, and extremely brief.
+2. Provide witty and highly actionable advice. No conversational fillers.
+3. Use simple, clean formatting.`;
 
-Your capabilities (leverage these models/concepts in response to the user's message):
-1. **Generating Plans**: If they ask to plan, outline, or schedule a task (e.g. "plan for task X"), output a clear step-by-step roadmap with estimated completion, priority, recommended start time, and a table of 3-4 micro-steps with duration.
-2. **Risk & Procrastination Analysis**: If they ask about procrastination, lazy progress, or risk (e.g. "Am I procrastinating?"), calculate a procrastination score (0-100%) for their tasks, give them a witty warning, and a highly specific "5-minute micro-action" to break the barrier.
-3. **Emergency Rescue Mode**: If they are struggling under a tight deadline (under 2h) or ask for rescue advice (e.g. "rescue me" or "due soon"), generate an aggressive action timeline, list what they MUST skip, and define a 'Minimum Viable Submission' to save their grade/score.
-4. **Motivational/Productivity Advice**: If they ask for productivity advice, sound tired, or ask for general tips, give them custom motivation tailored to their actual tasks.
+    const prompt = `${tasksContext ? tasksContext + "\n\n" : ""}${simplifiedHistory ? "Recent Context:\n" + simplifiedHistory + "\n\n" : ""}User: ${message}
 
-Formatting Rules:
-- Keep responses compact, extremely structured, and highly scannable using Markdown (use bold headings, lists, bullet points).
-- Maximum 4-6 concise sentences or short bullet points.
-- Sound encouraging, witty, slightly sarcastic but highly helpful and hyper-focused. Use formatting to make it look premium.`;
+(Note: Reply within 50 to 80 words maximum, without filler intro/outro.)`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const response = await callGeminiWithRetry(ai, {
+      model: modelToUse,
       contents: prompt,
-    });
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.3, // low temperature for fast, low-effort reasoning
+      }
+    }, 1); // retry only once for chatbot
 
     res.json({ response: response.text || "No response generated." });
   } catch (error: any) {
     console.error("Error in /api/chatbot:", error);
-    res.status(500).json({ error: error.message });
+    res.status(503).json({
+      status: "temporarily_unavailable",
+      error: "⚠️ Guardian AI is currently experiencing high demand. Please try again in a few moments."
+    });
   }
 });
 

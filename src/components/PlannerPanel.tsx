@@ -1,20 +1,50 @@
-import React, { useState } from "react";
-import { Sparkles, CheckSquare, Square, Calendar, Clock, Compass, ShieldAlert } from "lucide-react";
-import { AIPlan } from "../types";
+import React from "react";
+import { Sparkles, CheckSquare, Square, Calendar, Clock, Compass, ShieldAlert, CheckCircle } from "lucide-react";
+import { Task } from "../types";
 
 interface PlannerPanelProps {
-  plan: AIPlan;
-  taskTitle: string;
+  task: Task;
+  onUpdateTask: (task: Task) => void;
 }
 
-export default function PlannerPanel({ plan, taskTitle }: PlannerPanelProps) {
-  const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
+export default function PlannerPanel({ task, onUpdateTask }: PlannerPanelProps) {
+  const plan = task.aiPlan;
+  if (!plan) return null;
+
+  const taskTitle = task.title;
+  const completedSteps = task.completedMicroSteps || {};
 
   const toggleStep = (idx: number) => {
-    setCompletedSteps((prev) => ({
-      ...prev,
-      [idx]: !prev[idx],
-    }));
+    if (task.completed) return; // disable editing when completed
+
+    const updatedSteps = {
+      ...completedSteps,
+      [idx]: !completedSteps[idx],
+    };
+
+    const completedCount = Object.values(updatedSteps).filter(Boolean).length;
+    const totalSteps = plan.micro_steps.length;
+    const progressPercent = totalSteps ? Math.round((completedCount / totalSteps) * 100) : 0;
+
+    const isAllCompleted = completedCount === totalSteps && totalSteps > 0;
+
+    const updatedTask: Task = {
+      ...task,
+      completedMicroSteps: updatedSteps,
+      progress: progressPercent,
+      completed: isAllCompleted,
+      completedAt: isAllCompleted ? new Date().toISOString() : task.completedAt,
+      lastUpdated: new Date().toISOString(),
+      ...(isAllCompleted ? {
+        status: "ON TRACK" as const,
+        riskScore: 0,
+        procrastinationScore: 0,
+        reason: "Task completed securely by finishing all AI micro-steps!",
+        suggestedAction: "None. Rest up!",
+      } : {})
+    };
+
+    onUpdateTask(updatedTask);
   };
 
   const completedCount = Object.values(completedSteps).filter(Boolean).length;
@@ -36,6 +66,21 @@ export default function PlannerPanel({ plan, taskTitle }: PlannerPanelProps) {
         </div>
       </div>
 
+      {/* Task Completed visual banner */}
+      {task.completed && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-[#34D399] flex items-center gap-3 animate-pop-success animate-pulse-emerald">
+          <div className="p-2 bg-emerald-500/25 rounded-xl">
+            <CheckCircle className="w-5 h-5 text-[#34D399]" />
+          </div>
+          <div>
+            <h4 className="font-sans font-black text-xs uppercase tracking-wider">✅ Task Completed</h4>
+            <p className="text-[10px] text-emerald-300/80 font-mono mt-0.5">
+              Defended on {task.completedAt ? new Date(task.completedAt).toLocaleString() : new Date().toLocaleString()}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Stats summary */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="p-3 bg-white/5 rounded-xl border border-white/10">
@@ -51,7 +96,10 @@ export default function PlannerPanel({ plan, taskTitle }: PlannerPanelProps) {
         <div className="p-3 bg-white/5 rounded-xl border border-white/10 col-span-2 md:col-span-1">
           <span className="block text-[10px] text-white/50 font-mono uppercase">Start Zone</span>
           <span className="block font-sans text-xs font-bold mt-1 text-white/90 truncate">
-            {new Date(plan.recommended_start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || plan.recommended_start_time}
+            {(() => {
+              const d = new Date(plan.recommended_start_time);
+              return isNaN(d.getTime()) ? plan.recommended_start_time : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            })()}
           </span>
         </div>
       </div>
@@ -87,11 +135,12 @@ export default function PlannerPanel({ plan, taskTitle }: PlannerPanelProps) {
               <button
                 key={idx}
                 onClick={() => toggleStep(idx)}
+                disabled={task.completed}
                 className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
                   isCompleted
                     ? "bg-[#34D399]/5 border-[#34D399]/20 text-white/50"
                     : "bg-white/[0.01] border-white/5 hover:bg-white/5 hover:border-white/10 text-white"
-                }`}
+                } ${task.completed ? "cursor-not-allowed opacity-60" : ""}`}
               >
                 <div className="mt-0.5 shrink-0">
                   {isCompleted ? (
