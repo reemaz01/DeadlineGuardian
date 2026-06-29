@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Clock,
   Sparkles,
@@ -206,6 +207,7 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
 
     setIsLoading(true);
     setError(null);
+    setActiveTab("plan");
 
     // 3. Keep only one active request at a time - cancel any duplicate/pending request
     if (abortControllerRef.current) {
@@ -341,6 +343,7 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
 
     setIsLoading(true);
     setError(null);
+    setActiveTab("rescue");
     try {
       const res = await fetch("/api/rescue-mode", {
         method: "POST",
@@ -483,449 +486,461 @@ export default function TaskCard({ task, onUpdateTask, onDeleteTask }: TaskCardP
   };
 
   return (
-    <div
-      id={`task-card-${task.id}`}
-      className={`p-6 rounded-[32px] border transition-all duration-300 relative overflow-hidden ${
-        task.completed
-          ? "bg-white/5 border-[#34D399]/30"
-          : isOverdue
-          ? "bg-gradient-to-br from-[#FF6B6B]/15 to-[#0F1115] border-[#FF6B6B]/30"
-          : task.status === "HIGH RISK" || isRescueEligible
-          ? "bg-gradient-to-br from-[#FF6B6B]/15 via-[#A855F7]/10 to-[#0F1115] border-[#FF6B6B]/40 shadow-xl shadow-red-500/5 hover:scale-[1.01]"
-          : "bg-white/5 border-white/10 hover:border-white/20 hover:scale-[1.01]"
-      }`}
-    >
-      {/* Outer gradient subtle glow for high danger tasks */}
-      {!task.completed && (task.status === "HIGH RISK" || isRescueEligible) && (
-        <div className="absolute inset-0 border border-red-500/20 rounded-[32px] animate-pulse pointer-events-none" />
-      )}
-
-      {/* Top Header */}
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2.5 bg-white/5 rounded-xl border border-white/10">
-            <CategoryIcon category={task.category} className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={`text-[9px] px-2.5 py-0.5 rounded-full border font-bold uppercase tracking-wider ${getCategoryBadgeStyles(task.category)}`}>
-                {task.category}
-              </span>
-              <span className={`text-[9px] px-2.5 py-0.5 rounded-full border font-mono font-black tracking-wider ${getRiskLabelColor()}`}>
-                {task.completed ? "COMPLETED" : isOverdue ? "OVERDUE" : isRescueEligible ? "EMERGENCY" : task.status}
-              </span>
+    <div className="relative group/taskcard z-10">
+      {/* Slide-out Left Panel */}
+      <AnimatePresence>
+        {activeTab !== "none" && (
+          <motion.div
+            initial={{ opacity: 0, x: 20, scale: 0.98 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 20, scale: 0.98 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute top-0 right-[calc(100%+16px)] h-full w-[400px] bg-[#0E1116] border border-white/10 rounded-[32px] shadow-2xl z-50 flex flex-col overflow-hidden max-lg:inset-0 max-lg:w-full max-lg:right-auto max-lg:left-0 max-lg:h-full max-lg:rounded-[32px] max-lg:border-white/10"
+          >
+            {/* Panel Header */}
+            <div className="flex items-center justify-between p-5 border-b border-white/5 bg-white/[0.02]">
+              <div className="flex items-center gap-2">
+                {activeTab === "plan" && <Sparkles className="w-4 h-4 text-[#5B8CFF]" />}
+                {activeTab === "procrastination" && <Zap className="w-4 h-4 text-amber-400" />}
+                {activeTab === "rescue" && <ShieldAlert className="w-4 h-4 text-red-400 animate-pulse" />}
+                <h4 className="text-xs font-sans font-black uppercase tracking-wider text-white">
+                  {activeTab === "plan" && "AI Execution Plan"}
+                  {activeTab === "procrastination" && "Procrastination Shield Audit"}
+                  {activeTab === "rescue" && "Emergency Rescue Plan"}
+                </h4>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveTab("none");
+                  setError(null);
+                }}
+                className="p-1 rounded-lg hover:bg-white/5 text-white/40 hover:text-white transition-all cursor-pointer"
+                title="Close Panel"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
             </div>
-            <h3 className={`font-display font-black text-base text-white mt-2 leading-tight ${task.completed ? "line-through text-white/40" : ""}`}>
-              {task.title}
-            </h3>
+
+            {/* Panel Content Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-[#0E1116]">
+              {isLoading ? (
+                <div className="h-full flex flex-col items-center justify-center py-12 text-center space-y-4">
+                  <div className="relative w-12 h-12 flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border-2 border-t-transparent border-[#5B8CFF] animate-spin" />
+                    <div className="w-6 h-6 rounded-full bg-[#5B8CFF]/15 flex items-center justify-center">
+                      <Sparkles className="w-3 h-3 text-[#5B8CFF] animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-sans font-bold text-white">Computing strategies...</p>
+                    <p className="text-[10px] font-mono text-white/40">Guardian AI is analyzing deadline latency</p>
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex flex-col gap-2">
+                  <p className="font-sans font-bold">⚠️ Diagnostic Failure</p>
+                  <p className="font-sans text-white/70">{error}</p>
+                  <button
+                    onClick={() => {
+                      if (activeTab === "plan") handleGeneratePlan(true);
+                      else if (activeTab === "procrastination") handleCheckProcrastination();
+                      else if (activeTab === "rescue") handleGenerateRescue();
+                    }}
+                    className="mt-1 self-start px-3 py-1 bg-red-500/20 hover:bg-red-500/35 border border-red-500/30 text-white rounded-lg transition-all text-[10px] uppercase font-bold cursor-pointer"
+                  >
+                    Retry Attempt
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {activeTab === "plan" && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-3 duration-200">
+                      {/* Interactive Tweak Header */}
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[9px] font-mono text-white/40 uppercase">Interactive Roadmap</span>
+                        <button
+                          onClick={() => setShowPlanConfig(!showPlanConfig)}
+                          className={`text-[9px] font-mono hover:underline flex items-center gap-1 cursor-pointer ${
+                            showPlanConfig ? "text-purple-400 font-bold" : "text-[#5B8CFF]"
+                          }`}
+                        >
+                          <Sliders className="w-3 h-3" />
+                          <span>{showPlanConfig ? "Hide Config" : "Tweak Parameters"}</span>
+                        </button>
+                      </div>
+
+                      {/* Config Area */}
+                      {showPlanConfig && (
+                        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4 animate-in fade-in slide-in-from-top-2">
+                          <div className="flex flex-col gap-4">
+                            {/* Granularity */}
+                            <div className="flex flex-col gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[11px] font-sans font-bold text-white tracking-wide">Granularity</span>
+                                <span className="text-[9px] font-mono text-white/30">Detail level</span>
+                              </div>
+                              <div className="flex items-center gap-1 bg-[#15181F] p-1 rounded-xl border border-white/10">
+                                <button
+                                  type="button"
+                                  onClick={() => setGranularity("detailed")}
+                                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition-all border cursor-pointer ${
+                                    granularity === "detailed"
+                                      ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white border-white/10 shadow"
+                                      : "text-white/50 border-transparent hover:bg-white/5"
+                                  }`}
+                                >
+                                  Precise
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setGranularity("milestone")}
+                                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition-all border cursor-pointer ${
+                                    granularity === "milestone"
+                                      ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white border-white/10 shadow"
+                                      : "text-white/50 border-transparent hover:bg-white/5"
+                                  }`}
+                                >
+                                  Milestone
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Focus Sprint */}
+                            <div className="flex flex-col gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[11px] font-sans font-bold text-white tracking-wide">Focus Sprint</span>
+                                <span className="text-[9px] font-mono text-white/30">Pomodoro interval</span>
+                              </div>
+                              <div className="flex items-center gap-1 bg-[#15181F] p-1 rounded-xl border border-white/10">
+                                {[25, 45, 60, 90].map((mins) => (
+                                  <button
+                                    key={mins}
+                                    type="button"
+                                    onClick={() => setFocusInterval(mins as any)}
+                                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono font-bold transition-all border cursor-pointer ${
+                                      focusInterval === mins
+                                        ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white border-white/10 shadow"
+                                        : "text-white/50 border-transparent hover:bg-white/5"
+                                    }`}
+                                  >
+                                    {mins}m
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Execution Style */}
+                            <div className="flex flex-col gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[11px] font-sans font-bold text-white tracking-wide">Execution Style</span>
+                                <span className="text-[9px] font-mono text-white/30">Planning style</span>
+                              </div>
+                              <div className="flex items-center gap-1 bg-[#15181F] p-1 rounded-xl border border-white/10">
+                                {["bulletproof", "speed", "flexible"].map((style) => (
+                                  <button
+                                    key={style}
+                                    type="button"
+                                    onClick={() => setWorkStyle(style as any)}
+                                    className={`flex-1 py-1.5 rounded-lg text-[9px] font-mono font-bold uppercase transition-all border cursor-pointer ${
+                                      workStyle === style
+                                        ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white border-white/10 shadow"
+                                        : "text-white/50 border-transparent hover:bg-white/5"
+                                    }`}
+                                  >
+                                    {style}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-center pt-1">
+                            <button
+                              onClick={() => handleGeneratePlan(true)}
+                              className="w-full py-2 bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white rounded-xl text-[10px] font-sans font-black uppercase tracking-wider transition-all hover:brightness-110 flex items-center justify-center gap-1.5 shadow-md shadow-[#5B8CFF]/15 cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              <span>Regenerate Blueprint</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {task.aiPlan ? (
+                        <PlannerPanel task={task} onUpdateTask={onUpdateTask} />
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-xs text-white/40">No plan generated yet. Adjust parameters above and trigger plan generation.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeTab === "rescue" && task.rescuePlan && (
+                    <div className="animate-in fade-in slide-in-from-top-3 duration-200">
+                      <RescuePanel plan={task.rescuePlan} deadline={task.deadline} />
+                    </div>
+                  )}
+
+                  {activeTab === "procrastination" && task.procrastinationScore > 0 && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-3 duration-200">
+                      {/* Score card */}
+                      <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Zap className={`w-4 h-4 ${
+                            task.procrastinationRiskLevel === "Critical" ? "text-red-500 animate-pulse" :
+                            task.procrastinationRiskLevel === "High" ? "text-orange-500" :
+                            task.procrastinationRiskLevel === "Medium" ? "text-amber-400" : "text-[#34D399]"
+                          }`} />
+                          <span className="text-xs font-bold uppercase tracking-widest text-white/80">Diagnostics</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-full border border-white/10 font-mono text-xs">
+                          <span className="text-white/40">Score:</span>
+                          <span className={`font-black ${
+                            task.procrastinationScore >= 80 ? "text-red-500" :
+                            task.procrastinationScore >= 50 ? "text-amber-400" : "text-[#34D399]"
+                          }`}>{task.procrastinationScore}%</span>
+                        </div>
+                      </div>
+
+                      {/* Risk level */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
+                          task.procrastinationRiskLevel === "Critical" ? "bg-red-500/15 border border-red-500/30 text-red-400" :
+                          task.procrastinationRiskLevel === "High" ? "bg-orange-500/15 border border-orange-500/30 text-orange-400" :
+                          task.procrastinationRiskLevel === "Medium" ? "bg-amber-400/15 border border-amber-400/30 text-amber-300" :
+                          "bg-emerald-500/15 border border-emerald-500/30 text-[#34D399]"
+                        }`}>
+                          🚨 Risk: {task.procrastinationRiskLevel || "Low"}
+                        </span>
+                        {task.procrastinationReason && (
+                          <span className="text-[10px] font-sans text-white/50 border border-white/10 px-2 py-0.5 rounded bg-white/5">
+                            Reason: {task.procrastinationReason}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* AI Analysis Narrative */}
+                      <div className="space-y-1.5">
+                        <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">📝 AI Analysis</span>
+                        <p className="font-sans text-xs text-white/85 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
+                          {task.procrastinationAnalysis || task.procrastinationWarning}
+                        </p>
+                      </div>
+
+                      {/* Recommended Action */}
+                      <div className="space-y-1.5">
+                        <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">✅ Recommended Next Action</span>
+                        <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex items-start gap-2.5">
+                          <span className="text-base select-none mt-0.5">⚡</span>
+                          <p className="font-sans text-xs text-[#34D399] font-bold leading-relaxed">
+                            {task.procrastinationQuickAction}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Motivation Tip */}
+                      {task.procrastinationMotivationTip && (
+                        <div className="space-y-1.5">
+                          <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">💡 Motivation Spark</span>
+                          <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-xl flex items-start gap-2.5">
+                            <span className="text-base select-none mt-0.5">✨</span>
+                            <p className="font-sans text-xs text-blue-300 italic leading-relaxed">
+                              {task.procrastinationMotivationTip}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Task Card */}
+      <div
+        id={`task-card-${task.id}`}
+        className={`p-6 rounded-[32px] border transition-all duration-300 relative overflow-hidden ${
+          task.completed
+            ? "bg-white/5 border-[#34D399]/30"
+            : isOverdue
+            ? "bg-gradient-to-br from-[#FF6B6B]/15 to-[#0F1115] border-[#FF6B6B]/30"
+            : task.status === "HIGH RISK" || isRescueEligible
+            ? "bg-gradient-to-br from-[#FF6B6B]/15 via-[#A855F7]/10 to-[#0F1115] border-[#FF6B6B]/40 shadow-xl shadow-red-500/5 hover:scale-[1.01]"
+            : "bg-white/5 border-white/10 hover:border-white/20 hover:scale-[1.01]"
+        }`}
+      >
+        {/* Outer gradient subtle glow for high danger tasks */}
+        {!task.completed && (task.status === "HIGH RISK" || isRescueEligible) && (
+          <div className="absolute inset-0 border border-red-500/20 rounded-[32px] animate-pulse pointer-events-none" />
+        )}
+
+        {/* Top Header */}
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 bg-white/5 rounded-xl border border-white/10">
+              <CategoryIcon category={task.category} className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`text-[9px] px-2.5 py-0.5 rounded-full border font-bold uppercase tracking-wider ${getCategoryBadgeStyles(task.category)}`}>
+                  {task.category}
+                </span>
+                <span className={`text-[9px] px-2.5 py-0.5 rounded-full border font-mono font-black tracking-wider ${getRiskLabelColor()}`}>
+                  {task.completed ? "COMPLETED" : isOverdue ? "OVERDUE" : isRescueEligible ? "EMERGENCY" : task.status}
+                </span>
+              </div>
+              <h3 className={`font-display font-black text-base text-white mt-2 leading-tight ${task.completed ? "line-through text-white/40" : ""}`}>
+                {task.title}
+              </h3>
+            </div>
+          </div>
+
+          {/* Actions Container */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Complete Toggle */}
+            <button
+              onClick={handleToggleComplete}
+              className={`p-2 rounded-xl transition-all flex items-center justify-center border cursor-pointer ${
+                task.completed
+                  ? "bg-[#34D399]/20 border-[#34D399]/40 text-[#34D399] hover:bg-[#34D399]/30"
+                  : "bg-white/5 border-white/10 text-white/40 hover:text-[#34D399] hover:border-[#34D399]/30 hover:bg-[#34D399]/10"
+              }`}
+              title={task.completed ? "Mark as In Progress" : "Mark as Complete"}
+            >
+              <CheckCircle className={`w-4 h-4 ${task.completed ? "animate-bounce" : ""}`} />
+            </button>
+
+            {/* Delete */}
+            <button
+              onClick={() => onDeleteTask(task.id)}
+              className="p-2 hover:bg-red-400/10 text-white/40 hover:text-[#FF6B6B] rounded-xl transition-all cursor-pointer"
+              title="Delete Task"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        {/* Actions Container */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* Complete Toggle */}
-          <button
-            onClick={handleToggleComplete}
-            className={`p-2 rounded-xl transition-all flex items-center justify-center border ${
-              task.completed
-                ? "bg-[#34D399]/20 border-[#34D399]/40 text-[#34D399] hover:bg-[#34D399]/30"
-                : "bg-white/5 border-white/10 text-white/40 hover:text-[#34D399] hover:border-[#34D399]/30 hover:bg-[#34D399]/10"
-            }`}
-            title={task.completed ? "Mark as In Progress" : "Mark as Complete"}
-          >
-            <CheckCircle className={`w-4 h-4 ${task.completed ? "animate-bounce" : ""}`} />
-          </button>
-
-          {/* Delete */}
-          <button
-            onClick={() => onDeleteTask(task.id)}
-            className="p-2 hover:bg-red-400/10 text-white/40 hover:text-[#FF6B6B] rounded-xl transition-all"
-            title="Delete Task"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Time Remaining visual ticker / Completion banner */}
-      <div className={`mb-5 flex items-center justify-between p-3.5 rounded-2xl border ${
-        task.completed
-          ? "bg-emerald-500/10 border-emerald-500/20 text-[#34D399] animate-bounce-subtle"
-          : "bg-white/5 border-white/10"
-      }`}>
-        <span className="flex items-center gap-1.5 text-xs text-white/50 font-bold uppercase tracking-wider">
-          <Clock className={`w-4 h-4 ${task.completed ? "text-[#34D399]" : "text-[#5B8CFF]"}`} />
-          <span>{task.completed ? "Status" : "Timer"}</span>
-        </span>
-        <span className={`font-mono text-xs font-black tracking-tight ${
+        {/* Time Remaining visual ticker / Completion banner */}
+        <div className={`mb-5 flex items-center justify-between p-3.5 rounded-2xl border ${
           task.completed
-            ? "text-[#34D399]"
-            : isOverdue || isRescueEligible
-            ? "text-[#FF6B6B]"
-            : "text-[#5B8CFF]"
+            ? "bg-emerald-500/10 border-emerald-500/20 text-[#34D399] animate-bounce-subtle"
+            : "bg-white/5 border-white/10"
         }`}>
-          {task.completed ? "✅ Completed" : countdown}
-        </span>
-      </div>
-
-      {/* Progress slider bar & feedback */}
-      <div className="mb-6 space-y-2">
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/40 font-mono uppercase font-bold tracking-wider">Velocity Check</span>
-          <span className="text-xs font-mono font-black text-white">{task.progress}%</span>
+          <span className="flex items-center gap-1.5 text-xs text-white/50 font-bold uppercase tracking-wider">
+            <Clock className={`w-4 h-4 ${task.completed ? "text-[#34D399]" : "text-[#5B8CFF]"}`} />
+            <span>{task.completed ? "Status" : "Timer"}</span>
+          </span>
+          <span className={`font-mono text-xs font-black tracking-tight ${
+            task.completed
+              ? "text-[#34D399]"
+              : isOverdue || isRescueEligible
+              ? "text-[#FF6B6B]"
+              : "text-[#5B8CFF]"
+          }`}>
+            {task.completed ? "✅ Completed" : countdown}
+          </span>
         </div>
-        
-        {/* Slider */}
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={task.progress}
-          onChange={handleProgressChange}
-          disabled={task.completed}
-          className={`w-full h-1.5 bg-white/10 rounded-lg appearance-none focus:outline-none ${
-            task.completed ? "cursor-not-allowed accent-[#34D399]" : "cursor-pointer accent-[#5B8CFF]"
-          }`}
-        />
 
-        <p className="text-[10px] font-sans text-white/50 leading-relaxed italic">
-          {getProgressEvaluation()}
-        </p>
+        {/* Progress slider bar & feedback */}
+        <div className="mb-6 space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] text-white/40 font-mono uppercase font-bold tracking-wider">Velocity Check</span>
+            <span className="text-xs font-mono font-black text-white">{task.progress}%</span>
+          </div>
+          
+          {/* Slider */}
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={task.progress}
+            onChange={handleProgressChange}
+            disabled={task.completed}
+            className={`w-full h-1.5 bg-white/10 rounded-lg appearance-none focus:outline-none ${
+              task.completed ? "cursor-not-allowed accent-[#34D399]" : "cursor-pointer accent-[#5B8CFF]"
+            }`}
+          />
 
-        {task.completed && task.completedAt && (
-          <p className="text-[10px] font-mono text-[#34D399] leading-relaxed font-black uppercase mt-1 animate-pulse">
-            Completed: {new Date(task.completedAt).toLocaleString()}
+          <p className="text-[10px] font-sans text-white/50 leading-relaxed italic">
+            {getProgressEvaluation()}
           </p>
-        )}
-      </div>
 
-      {/* Quick Action buttons */}
-      <div className="flex flex-col gap-2 pt-3 border-t border-white/5 w-full">
-        <div className="flex gap-2 w-full">
+          {task.completed && task.completedAt && (
+            <p className="text-[10px] font-mono text-[#34D399] leading-relaxed font-black uppercase mt-1 animate-pulse">
+              Completed: {new Date(task.completedAt).toLocaleString()}
+            </p>
+          )}
+        </div>
+
+        {/* Quick Action buttons */}
+        <div className="flex flex-col gap-2 pt-3 border-t border-white/5 w-full">
+          <div className="flex gap-2 w-full">
+            <button
+              onClick={() => handleGeneratePlan(false)}
+              disabled={isLoading}
+              className={`flex-1 flex items-center justify-center gap-2 h-10 rounded-2xl font-sans font-bold text-[10px] uppercase tracking-wider transition-all duration-300 ease-in-out border cursor-pointer ${
+                activeTab === "plan"
+                  ? "bg-gradient-to-r from-[#5B8CFF] to-[#A855F7] text-white-force border-transparent shadow-lg shadow-[#5B8CFF]/25 scale-[1.01]"
+                  : "bg-neutral-950/80 hover:bg-[#15181F] text-white/80 hover:text-white border border-white/10 hover:border-white/30 hover:shadow-md hover:shadow-white/5"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{task.aiPlan ? "View AI Plan" : "Generate Plan"}</span>
+            </button>
+
+            {/* Plan precise customizer slider toggle */}
+            <button
+              onClick={() => {
+                setShowPlanConfig(!showPlanConfig);
+                setActiveTab("plan");
+              }}
+              disabled={isLoading}
+              className={`w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-300 ease-in-out border shrink-0 cursor-pointer ${
+                showPlanConfig
+                  ? "bg-gradient-to-r from-purple-500/20 to-[#A855F7]/30 text-purple-300 border-purple-500/40 shadow-lg shadow-purple-500/10"
+                  : "bg-neutral-950/80 hover:bg-[#15181F] text-white/60 hover:text-white border border-white/10 hover:border-white/30 hover:shadow-md hover:shadow-white/5"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title="Tweak Precise Planning Parameters"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <button
-            onClick={() => handleGeneratePlan(false)}
+            onClick={handleCheckProcrastination}
             disabled={isLoading}
-            className={`flex-1 flex items-center justify-center gap-2 h-10 rounded-2xl font-sans font-bold text-[10px] uppercase tracking-wider transition-all duration-300 ease-in-out border ${
-              activeTab === "plan"
-                ? "bg-gradient-to-r from-[#5B8CFF] to-[#A855F7] text-white-force border-transparent shadow-lg shadow-[#5B8CFF]/25 scale-[1.01]"
+            className={`w-full flex items-center justify-center gap-2 h-10 rounded-2xl font-sans font-bold text-[10px] uppercase tracking-wider transition-all duration-300 ease-in-out border cursor-pointer ${
+              activeTab === "procrastination"
+                ? "bg-gradient-to-r from-amber-400 to-orange-500 text-black border-transparent shadow-lg shadow-amber-400/25 scale-[1.01]"
                 : "bg-neutral-950/80 hover:bg-[#15181F] text-white/80 hover:text-white border border-white/10 hover:border-white/30 hover:shadow-md hover:shadow-white/5"
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{task.aiPlan ? "View AI Plan" : "Generate Plan"}</span>
+            <Zap className="w-3.5 h-3.5" />
+            <span>Procrastination Check</span>
           </button>
 
-          {/* Plan precise customizer slider toggle */}
-          <button
-            onClick={() => {
-              setShowPlanConfig(!showPlanConfig);
-              if (!task.aiPlan) {
-                setActiveTab("none");
-              }
-            }}
-            disabled={isLoading}
-            className={`w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-300 ease-in-out border shrink-0 ${
-              showPlanConfig
-                ? "bg-gradient-to-r from-purple-500/20 to-[#A855F7]/30 text-purple-300 border-purple-500/40 shadow-lg shadow-purple-500/10"
-                : "bg-neutral-950/80 hover:bg-[#15181F] text-white/60 hover:text-white border border-white/10 hover:border-white/30 hover:shadow-md hover:shadow-white/5"
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title="Tweak Precise Planning Parameters"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <button
-          onClick={handleCheckProcrastination}
-          disabled={isLoading}
-          className={`w-full flex items-center justify-center gap-2 h-10 rounded-2xl font-sans font-bold text-[10px] uppercase tracking-wider transition-all duration-300 ease-in-out border ${
-            activeTab === "procrastination"
-              ? "bg-gradient-to-r from-amber-400 to-orange-500 text-black border-transparent shadow-lg shadow-amber-400/25 scale-[1.01]"
-              : "bg-neutral-950/80 hover:bg-[#15181F] text-white/80 hover:text-white border border-white/10 hover:border-white/30 hover:shadow-md hover:shadow-white/5"
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          <Zap className="w-3.5 h-3.5" />
-          <span>Procrastination Check</span>
-        </button>
-
-        {/* Emergency Rescue button */}
-        {(isRescueEligible || task.rescuePlan) && (
-          <button
-            onClick={handleGenerateRescue}
-            disabled={isLoading}
-            className={`w-full flex items-center justify-center gap-2 h-10 rounded-2xl font-sans font-black text-[10px] uppercase tracking-wider transition-all duration-300 ease-in-out border animate-pulse ${
-              activeTab === "rescue"
-                ? "bg-gradient-to-r from-red-500 to-pink-600 text-white-force border-transparent shadow-lg shadow-red-500/25 scale-[1.01]"
-                : "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 hover:shadow-md hover:shadow-red-500/5"
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span>Emergency Rescue Plan</span>
-          </button>
-        )}
-      </div>
-
-      {/* Precise Plan Configuration Panel */}
-      {(showPlanConfig || (activeTab === "none" && !task.aiPlan && showPlanConfig)) && (
-        <div className="mt-3 p-5 sm:p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center justify-between">
-            <h5 className="text-[10px] font-mono uppercase tracking-widest text-white/80 font-bold flex items-center gap-1.5">
-              <Sliders className="w-3.5 h-3.5 text-[#5B8CFF]" />
-              <span>Precise Plan Customizer</span>
-            </h5>
+          {/* Emergency Rescue button */}
+          {(isRescueEligible || task.rescuePlan) && (
             <button
-              onClick={() => setShowPlanConfig(false)}
-              className="text-[9px] font-mono text-white/40 hover:text-white"
-            >
-              Hide
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-5 sm:gap-6">
-            {/* Granularity Selector Card */}
-            <div className="flex flex-col gap-3.5 p-5 sm:p-6 rounded-[24px] bg-white/[0.01] border border-white/5">
-              <span className="text-xs font-sans font-bold text-white tracking-wide">Granularity</span>
-              <span className="text-[10px] font-mono text-white/40">Checklist detail level</span>
-              <div className="flex justify-center w-full">
-                <div className="flex items-center gap-1.5 bg-[#15181F] p-1 rounded-[20px] border border-white/10 shrink-0 w-[200px]" style={{ width: "200px" }}>
-                  <button
-                    type="button"
-                    onClick={() => setGranularity("detailed")}
-                    className={`flex-1 h-9 flex items-center justify-center rounded-[16px] text-[10px] font-mono font-bold uppercase transition-all duration-300 ease-in-out border ${
-                      granularity === "detailed"
-                        ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white-force border-white/10 shadow-md shadow-[#5B8CFF]/15 scale-[1.02]"
-                        : "text-white/50 hover:text-white border-transparent hover:bg-white/5"
-                    }`}
-                  >
-                    Precise
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGranularity("milestone")}
-                    className={`flex-1 h-9 flex items-center justify-center rounded-[16px] text-[10px] font-mono font-bold uppercase transition-all duration-300 ease-in-out border ${
-                      granularity === "milestone"
-                        ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white-force border-white/10 shadow-md shadow-[#5B8CFF]/15 scale-[1.02]"
-                        : "text-white/50 hover:text-white border-transparent hover:bg-white/5"
-                    }`}
-                  >
-                    Milestone
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Focus Interval Selector Card */}
-            <div className="flex flex-col gap-3.5 p-5 sm:p-6 rounded-[24px] bg-white/[0.01] border border-white/5">
-              <span className="text-xs font-sans font-bold text-white tracking-wide">Focus Sprint</span>
-              <span className="text-[10px] font-mono text-white/40">Pomodoro interval</span>
-              <div className="flex justify-center w-full">
-                <div className="flex items-center gap-1 bg-[#15181F] p-1 rounded-[20px] border border-white/10 shrink-0 w-[200px]" style={{ width: "200px" }}>
-                  {[25, 45, 60, 90].map((mins) => (
-                    <button
-                      key={mins}
-                      type="button"
-                      onClick={() => setFocusInterval(mins as any)}
-                      className={`flex-1 h-9 flex items-center justify-center rounded-[16px] text-[10px] font-mono font-bold transition-all duration-300 ease-in-out border ${
-                        focusInterval === mins
-                          ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white-force border-white/10 shadow-md shadow-[#5B8CFF]/15 scale-[1.02]"
-                          : "text-white/50 hover:text-white border-transparent hover:bg-white/5"
-                      }`}
-                    >
-                      {mins}m
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Work Style Selector Card */}
-            <div className="flex flex-col gap-3.5 p-5 sm:p-6 rounded-[24px] bg-white/[0.01] border border-white/5">
-              <span className="text-xs font-sans font-bold text-white tracking-wide">Execution Style</span>
-              <span className="text-[10px] font-mono text-white/40">AI planning style</span>
-              <div className="flex justify-center w-full">
-                <div className="flex items-center gap-1 bg-[#15181F] p-1 rounded-[20px] border border-white/10 shrink-0 w-[200px]" style={{ width: "200px" }}>
-                  {(["bulletproof", "speed", "flexible"] as const).map((style) => (
-                    <button
-                      key={style}
-                      type="button"
-                      onClick={() => setWorkStyle(style)}
-                      className={`flex-1 h-9 flex items-center justify-center rounded-[16px] text-[9px] font-mono font-bold uppercase transition-all duration-300 ease-in-out border ${
-                        workStyle === style
-                          ? "bg-gradient-to-r from-[#5B8CFF] to-purple-500 text-white-force border-white/10 shadow-md shadow-[#5B8CFF]/15 scale-[1.02]"
-                          : "text-white/50 hover:text-white border-transparent hover:bg-white/5"
-                      }`}
-                    >
-                      {style}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-center mt-7">
-            <button
-              onClick={() => handleGeneratePlan(true)}
+              onClick={handleGenerateRescue}
               disabled={isLoading}
-              className="px-6 h-10 bg-gradient-to-r from-[#5B8CFF] to-purple-500 hover:brightness-110 active:scale-95 disabled:opacity-50 text-white-force rounded-2xl text-[10px] font-sans font-black uppercase tracking-wider transition-all duration-300 ease-in-out shadow-lg shadow-[#5B8CFF]/20 hover:shadow-[#5B8CFF]/30 flex items-center justify-center gap-2"
+              className={`w-full flex items-center justify-center gap-2 h-10 rounded-2xl font-sans font-black text-[10px] uppercase tracking-wider transition-all duration-300 ease-in-out border animate-pulse cursor-pointer ${
+                activeTab === "rescue"
+                  ? "bg-gradient-to-r from-red-500 to-pink-600 text-white border-transparent shadow-lg shadow-red-500/25 scale-[1.01]"
+                  : "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 hover:shadow-md hover:shadow-red-500/5"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{task.aiPlan ? "Regenerate Plan" : "Generate Plan"}</span>
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Emergency Rescue Plan</span>
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading state indicator */}
-      {isLoading && (
-        <div className="mt-4 p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 animate-pulse">
-          <div className="w-4 h-4 border-2 border-t-transparent border-[#5B8CFF] rounded-full animate-spin" />
-          <span className="text-xs font-sans text-white/60">Guardian AI is computing strategies...</span>
-        </div>
-      )}
-
-      {/* Error State Indicator */}
-      {error && (
-        <div className="mt-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex flex-col gap-1 text-xs font-sans">
-          <span className="font-bold">Execution Plan Error:</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Expanded detailed content tab */}
-      {!isLoading && activeTab === "plan" && task.aiPlan && (
-        <div className="mt-4 border-t border-white/10 pt-4 space-y-3 animate-in fade-in slide-in-from-top-3">
-          <div className="flex justify-between items-center px-1">
-            <span className="text-[9px] font-mono text-white/40 uppercase">Interactive Roadmap</span>
-            <button
-              onClick={() => setShowPlanConfig(!showPlanConfig)}
-              className="text-[9px] font-mono text-[#5B8CFF] hover:underline flex items-center gap-1"
-            >
-              <Sliders className="w-3 h-3" />
-              <span>Tweak Precise Settings</span>
-            </button>
-          </div>
-          <PlannerPanel task={task} onUpdateTask={onUpdateTask} />
-        </div>
-      )}
-
-      {!isLoading && activeTab === "rescue" && task.rescuePlan && (
-        <div className="mt-4 border-t border-white/10 pt-4 animate-in fade-in slide-in-from-top-3">
-          <RescuePanel plan={task.rescuePlan} deadline={task.deadline} />
-        </div>
-      )}
-
-      {activeTab === "procrastination" && (
-        <div className="mt-4 border-t border-white/10 pt-4 space-y-4 animate-in fade-in slide-in-from-top-3">
-          {isLoading ? (
-            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4 animate-pulse">
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                  <span className="text-xs font-bold text-white/70 uppercase tracking-widest font-sans">Shield Diagnostics Active...</span>
-                </div>
-                <div className="h-4 w-12 bg-white/10 rounded-lg" />
-              </div>
-              <div className="space-y-2">
-                <div className="h-3 w-3/4 bg-white/10 rounded" />
-                <div className="h-3 w-5/6 bg-white/10 rounded" />
-                <div className="h-3 w-1/2 bg-white/10 rounded" />
-              </div>
-              <div className="p-3 bg-white/5 rounded-xl border border-white/5 h-16 flex items-center justify-center">
-                <span className="text-[10px] text-white/40 font-mono">Evaluating temporal inertia & progress ratios...</span>
-              </div>
-            </div>
-          ) : error ? (
-            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex flex-col gap-2">
-              <p className="font-sans font-bold">⚠️ Diagnostic Failure</p>
-              <p className="font-sans text-white/70">{error}</p>
-              <button
-                onClick={handleCheckProcrastination}
-                className="mt-1 self-start px-3 py-1 bg-red-500/20 hover:bg-red-500/35 border border-red-500/30 text-white rounded-lg transition-all text-[10px] uppercase font-bold"
-              >
-                Retry Analysis
-              </button>
-            </div>
-          ) : task.procrastinationScore > 0 ? (
-            <div className="p-5 rounded-2xl bg-neutral-950/40 border border-amber-400/20 space-y-4 text-white shadow-xl">
-              {/* Risk Banner */}
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <div className="flex items-center gap-2">
-                  <Zap className={`w-4 h-4 ${
-                    task.procrastinationRiskLevel === "Critical" ? "text-red-500 animate-pulse" :
-                    task.procrastinationRiskLevel === "High" ? "text-orange-500" :
-                    task.procrastinationRiskLevel === "Medium" ? "text-amber-400" : "text-[#34D399]"
-                  }`} />
-                  <span className="text-xs font-bold uppercase tracking-widest text-white/80">Procrastination Shield Audit</span>
-                </div>
-                
-                {/* Score badge */}
-                <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-full border border-white/10 font-mono text-xs">
-                  <span className="text-white/40">Score:</span>
-                  <span className={`font-black ${
-                    task.procrastinationScore >= 80 ? "text-red-500" :
-                    task.procrastinationScore >= 50 ? "text-amber-400" : "text-[#34D399]"
-                  }`}>{task.procrastinationScore}%</span>
-                </div>
-              </div>
-
-              {/* Risk & Reason summary */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
-                  task.procrastinationRiskLevel === "Critical" ? "bg-red-500/15 border border-red-500/30 text-red-400" :
-                  task.procrastinationRiskLevel === "High" ? "bg-orange-500/15 border border-orange-500/30 text-orange-400" :
-                  task.procrastinationRiskLevel === "Medium" ? "bg-amber-400/15 border border-amber-400/30 text-amber-300" :
-                  "bg-emerald-500/15 border border-emerald-500/30 text-[#34D399]"
-                }`}>
-                  🚨 Risk: {task.procrastinationRiskLevel || "Low"}
-                </span>
-
-                {task.procrastinationReason && (
-                  <span className="text-[10px] font-sans text-white/50 border border-white/10 px-2 py-0.5 rounded bg-white/5">
-                    ⚠ Reason: {task.procrastinationReason}
-                  </span>
-                )}
-              </div>
-
-              {/* AI Analysis Narrative */}
-              <div className="space-y-1.5">
-                <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">📝 AI Analysis</span>
-                <p className="font-sans text-xs text-white/85 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
-                  {task.procrastinationAnalysis || task.procrastinationWarning}
-                </p>
-              </div>
-
-              {/* Recommended Next Action */}
-              <div className="space-y-1.5">
-                <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">✅ Recommended Next Action</span>
-                <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex items-start gap-2.5">
-                  <span className="text-base select-none mt-0.5">⚡</span>
-                  <p className="font-sans text-xs text-[#34D399] font-bold leading-relaxed">
-                    {task.procrastinationQuickAction}
-                  </p>
-                </div>
-              </div>
-
-              {/* Motivation Tip */}
-              {task.procrastinationMotivationTip && (
-                <div className="space-y-1.5">
-                  <span className="block text-[9px] uppercase font-mono text-white/40 tracking-wider">💡 Motivation Spark</span>
-                  <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-xl flex items-start gap-2.5">
-                    <span className="text-base select-none mt-0.5">✨</span>
-                    <p className="font-sans text-xs text-blue-300 italic leading-relaxed">
-                      {task.procrastinationMotivationTip}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-6">
-              <p className="text-xs text-white/40">No analysis available. Click "Procrastination Check" below to initiate diagnostic scanning.</p>
-            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
