@@ -86,8 +86,7 @@ app.post("/api/generate-plan", async (req, res) => {
   const configFocusInterval = focusInterval || 25;
   const configWorkStyle = workStyle || "bulletproof";
 
-  if (!ai) {
-    // Fallback logic if API key is missing (respects configuration to feel alive!)
+  const getFallbackPlan = () => {
     const score = Math.floor(Math.random() * 30) + 45;
     const recommendedDelayMin = 10;
     
@@ -112,7 +111,7 @@ app.post("/api/generate-plan", async (req, res) => {
       steps = steps.slice(0, 3); // speed mode is shorter
     }
 
-    return res.json({
+    return {
       estimated_completion_time: configWorkStyle === "speed" ? "1-2 hours" : "3-4 hours",
       priority: score > 75 ? "HIGH" : "MEDIUM",
       urgency_score: score,
@@ -120,7 +119,11 @@ app.post("/api/generate-plan", async (req, res) => {
       micro_steps: steps,
       summary: `Precise local blueprint crafted for "${taskTitle}". Strategy optimized for ${configWorkStyle} style, structured in ${configFocusInterval}-minute deep focus blocks with ${configGranularity} step tracking.`,
       motivation_tip: configWorkStyle === "speed" ? "Speed run active! Do not over-polish, get the MVP working first." : "Precision execution engaged. Trust the sequence and focus on one block at a time!"
-    });
+    };
+  };
+
+  if (!ai) {
+    return res.json(getFallbackPlan());
   }
 
   try {
@@ -161,9 +164,8 @@ Options: Granularity: ${configGranularity}, Focus Interval: ${configFocusInterva
 
     res.json(extractJSON(response.text || "{}"));
   } catch (error: any) {
-    console.error("Error in /api/generate-plan:", error);
-    // Return friendly error inside valid JSON with status 503 so frontend knows to retry or display busy message
-    res.status(503).json({ error: "AI is currently busy. Please try again in a few moments." });
+    console.error("Error in /api/generate-plan, falling back to rule-based generation:", error);
+    res.json(getFallbackPlan());
   }
 });
 
@@ -172,8 +174,8 @@ app.post("/api/rescue-mode", async (req, res) => {
   const { title, category, deadline, currentTime } = req.body;
   const ai = getAIClient();
 
-  if (!ai) {
-    return res.json({
+  const getFallbackRescue = () => {
+    return {
       emergency_timeline: [
         { time: "First 15 mins", action: "Turn off phone/block socials", priority: "CRITICAL" },
         { time: "Next 45 mins", action: "Write barebones content/skeleton draft", priority: "CRITICAL" },
@@ -186,7 +188,11 @@ app.post("/api/rescue-mode", async (req, res) => {
       what_to_skip: ["Polishing design", "Extra research", "Secondary sections"],
       minimum_viable_submission: "Bare minimum draft containing only core requested elements.",
       survival_tips: ["Don't perfect it, just submit it.", "Drink water. Stay hyperfocused."]
-    });
+    };
+  };
+
+  if (!ai) {
+    return res.json(getFallbackRescue());
   }
 
   try {
@@ -247,8 +253,8 @@ Generate an aggressive, action-oriented 'Emergency Rescue Strategy' in JSON form
 
     res.json(extractJSON(response.text || "{}"));
   } catch (error: any) {
-    console.error("Error in /api/rescue-mode:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error in /api/rescue-mode, falling back to rule-based rescue strategy:", error);
+    res.json(getFallbackRescue());
   }
 });
 
@@ -257,7 +263,7 @@ app.post("/api/smart-schedule", async (req, res) => {
   const { tasks } = req.body;
   const ai = getAIClient();
 
-  if (!ai) {
+  const getFallbackSchedule = () => {
     // Generate mock ranked & slotted list based on simple logic
     const sorted = [...tasks].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
     const ranked_tasks = sorted.map((t, idx) => ({
@@ -272,13 +278,17 @@ app.post("/api/smart-schedule", async (req, res) => {
       duration: "1.5 hours"
     }));
 
-    return res.json({
+    return {
       ranked_tasks,
       scheduled_slots,
       predicted_workload: tasks.length > 3 ? "Heavy & Jammed" : "Moderate & Manageable",
       schedule_health: tasks.length > 4 ? "Critical" : tasks.length > 2 ? "Tight" : "Good",
       health_reason: `You have ${tasks.length} active tasks registered.`
-    });
+    };
+  };
+
+  if (!ai) {
+    return res.json(getFallbackSchedule());
   }
 
   try {
@@ -331,8 +341,8 @@ Provide the optimized schedule back in JSON format. Rank them by urgency, alloca
 
     res.json(extractJSON(response.text || "{}"));
   } catch (error: any) {
-    console.error("Error in /api/smart-schedule:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error in /api/smart-schedule, falling back to rule-based schedule:", error);
+    res.json(getFallbackSchedule());
   }
 });
 
@@ -356,7 +366,7 @@ app.post("/api/check-procrastination", async (req, res) => {
     });
   }
 
-  if (!ai) {
+  const getFallbackProcrastination = () => {
     const daysElapsed = Math.max(1, Math.floor((now.getTime() - new Date(creationDate).getTime()) / (1000 * 60 * 60 * 24)));
     const score = Math.min(100, Math.max(10, Math.floor((daysElapsed * 20) * (1 - (progress || 0) / 100))));
     let risk_level = "Low";
@@ -385,14 +395,18 @@ app.post("/api/check-procrastination", async (req, res) => {
       motivation_tip = "Progress isn't all or nothing. Small steps compound.";
     }
 
-    return res.json({
+    return {
       procrastination_score: score,
       risk_level,
       analysis,
       reason,
       quick_action,
       motivation_tip
-    });
+    };
+  };
+
+  if (!ai) {
+    return res.json(getFallbackProcrastination());
   }
 
   try {
@@ -427,8 +441,8 @@ Calculate procrastination score (0-100), risk_level ("Low", "Medium", "High", or
 
     res.json(extractJSON(response.text || "{}"));
   } catch (error: any) {
-    console.error("Error in /api/check-procrastination:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error in /api/check-procrastination, falling back to rule-based check:", error);
+    res.json(getFallbackProcrastination());
   }
 });
 
@@ -437,7 +451,7 @@ app.post("/api/parse-voice", async (req, res) => {
   const { text, currentTime } = req.body;
   const ai = getAIClient();
 
-  if (!ai) {
+  const getFallbackParseVoice = () => {
     // Basic extraction fallback
     const normalized = text.toLowerCase();
     let category = "General";
@@ -457,11 +471,15 @@ app.post("/api/parse-voice", async (req, res) => {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
     tomorrow.setHours(17, 0, 0, 0);
 
-    return res.json({
+    return {
       title: text.length > 50 ? text.substring(0, 50) + "..." : text,
       deadline: tomorrow.toISOString(),
       category
-    });
+    };
+  };
+
+  if (!ai) {
+    return res.json(getFallbackParseVoice());
   }
 
   try {
@@ -493,8 +511,8 @@ Extract and format details into:
 
     res.json(extractJSON(response.text || "{}"));
   } catch (error: any) {
-    console.error("Error in /api/parse-voice:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error in /api/parse-voice, falling back to rule-based parsing:", error);
+    res.json(getFallbackParseVoice());
   }
 });
 
@@ -503,18 +521,20 @@ app.post("/api/chatbot", async (req, res) => {
   const { message, history, tasks } = req.body;
   const ai = getAIClient();
 
-  if (!ai) {
-    return res.json({
+  const getFallbackChatbot = () => {
+    return {
       response: `👋 Yo! I'm your Deadline Guardian AI chatbot assistant. 
 
 I see you have **${tasks ? tasks.length : 0} task(s)** in your registry. 
-To get full-powered AI personalized planning, procrastination score checking, and custom rescue schedules, please configure your **GEMINI_API_KEY** in the Secrets panel!
-
-For now, here is some rule-based advice:
+The AI is currently busy or experiencing high traffic. For now, here is some rule-based advice:
 ${tasks && tasks.length > 0 
   ? `🎯 Focus on **"${tasks[0].title}"** first! It's currently in your queue. Try setting a 5-minute timer and getting just the first step done. Momentum is everything!`
   : "📝 Let's get started by adding a task or habit in the Command Deck to protect your day!"}`
-    });
+    };
+  };
+
+  if (!ai) {
+    return res.json(getFallbackChatbot());
   }
 
   try {
@@ -553,11 +573,8 @@ CRITICAL RULES:
 
     res.json({ response: response.text || "No response generated." });
   } catch (error: any) {
-    console.error("Error in /api/chatbot:", error);
-    res.status(503).json({
-      status: "temporarily_unavailable",
-      error: "⚠️ Guardian AI is currently experiencing high demand. Please try again in a few moments."
-    });
+    console.error("Error in /api/chatbot, falling back to rule-based conversation:", error);
+    res.json(getFallbackChatbot());
   }
 });
 
